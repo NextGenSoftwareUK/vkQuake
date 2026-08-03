@@ -1,4 +1,4 @@
-/*
+﻿/*
 Copyright (C) 1996-2001 Id Software, Inc.
 Copyright (C) 2002-2009 John Fitzgibbons and others
 Copyright (C) 2010-2014 QuakeSpasm developers
@@ -22,7 +22,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 // sbar.c -- status bar code
 
 #include "quakedef.h"
-#include "oquake_star_integration.h"
+#include "oquake_ogengine_integration.h"
 
 #define STAT_MINUS 10 // num frame for '-' stats digit
 

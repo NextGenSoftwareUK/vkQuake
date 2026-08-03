@@ -1,4 +1,4 @@
-/**
+﻿/**
  * OQuake - OASIS STAR API Integration Implementation
  *
  * Integrates Quake with the OASIS STAR API so keys collected in ODOOM
@@ -11,9 +11,9 @@
  */
 
 #include "quakedef.h"
-#include "oquake_star_integration.h"
+#include "oquake_ogengine_integration.h"
 #include "oquake_version.h"
-#include "star_sync.h"
+#include "ogengine_sync.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -83,222 +83,222 @@ static void OQ_DrawStrCol(cb_context_t* cbx, float x, float y, const char* s, by
 /* Async `star beamin` guard: wall-clock seconds (frame-based timeout broke at high FPS). Keep near HttpClient timeout. */
 #define OQ_BEAMIN_ASYNC_TIMEOUT_SEC 30.0
 
-#ifndef STAR_API_HAS_SEND_ITEM
+#ifndef OGENGINE_HAS_SEND_ITEM
 /* Forward declare send-item API when using an older star_api.h. Link with updated star_api.lib. */
-star_api_result_t star_api_send_item_to_avatar(const char* target_username_or_avatar_id, const char* item_name, int quantity, const char* item_id);
-star_api_result_t star_api_send_item_to_clan(const char* clan_name_or_target, const char* item_name, int quantity, const char* item_id);
+ogengine_result_t ogengine_send_item_to_avatar(const char* target_username_or_avatar_id, const char* item_name, int quantity, const char* item_id);
+ogengine_result_t ogengine_send_item_to_clan(const char* clan_name_or_target, const char* item_name, int quantity, const char* item_id);
 #endif
 
-/* When OQUAKE_STAR_API_REFRESH_AVATAR_PROFILE_IMPL is defined, provide star_api_refresh_avatar_profile (forward to DLL at runtime). Use when the linked star_api.lib does not export it (e.g. Native AOT import lib quirk or old lib). Remove the define once the lib exports it. */
-#ifdef OQUAKE_STAR_API_REFRESH_AVATAR_PROFILE_IMPL
+/* When OQUAKE_OGENGINE_REFRESH_AVATAR_PROFILE_IMPL is defined, provide ogengine_refresh_avatar_profile (forward to DLL at runtime). Use when the linked star_api.lib does not export it (e.g. Native AOT import lib quirk or old lib). Remove the define once the lib exports it. */
+#ifdef OQUAKE_OGENGINE_REFRESH_AVATAR_PROFILE_IMPL
 #ifdef _WIN32
-void star_api_refresh_avatar_profile(void) {
+void ogengine_refresh_avatar_profile(void) {
 	typedef void (__cdecl *fn_t)(void);
 	static fn_t fn;
 	if (!fn) {
 		HMODULE h = GetModuleHandleA("star_api.dll");
-		if (h) fn = (fn_t)(void*)GetProcAddress(h, "star_api_refresh_avatar_profile");
+		if (h) fn = (fn_t)(void*)GetProcAddress(h, "ogengine_refresh_avatar_profile");
 	}
 	if (fn) fn();
 }
 #else
 /* RTLD_NEXT: dlopen(NULL)+dlsym resolves this same symbol in the executable → infinite recursion. NEEDED is often star_api.so, not libstar_api.so. */
-void star_api_refresh_avatar_profile(void) {
+void ogengine_refresh_avatar_profile(void) {
 	typedef void (*fn_t)(void);
 	static fn_t real_fn;
 	if (!real_fn)
-		real_fn = (fn_t)dlsym(RTLD_NEXT, "star_api_refresh_avatar_profile");
+		real_fn = (fn_t)dlsym(RTLD_NEXT, "ogengine_refresh_avatar_profile");
 	if (real_fn)
 		real_fn();
 }
 #endif
 #endif
 
-/* When OQUAKE_STAR_API_SESSION_IMPL is defined, provide JWT/session APIs by forwarding to star_api.dll at runtime. Avoids load-time "Entry Point Not Found" when DLL export list lags. */
-#ifdef OQUAKE_STAR_API_SESSION_IMPL
+/* When OQUAKE_OGENGINE_SESSION_IMPL is defined, provide JWT/session APIs by forwarding to star_api.dll at runtime. Avoids load-time "Entry Point Not Found" when DLL export list lags. */
+#ifdef OQUAKE_OGENGINE_SESSION_IMPL
 #ifdef _WIN32
-static star_api_result_t star_api_authenticate_with_jwt_out_impl(const char* user, const char* pass, char* jwt_buf, size_t jwt_size) {
-	typedef star_api_result_t (__cdecl *fn_t)(const char*, const char*, char*, size_t);
+static ogengine_result_t ogengine_authenticate_with_jwt_out_impl(const char* user, const char* pass, char* jwt_buf, size_t jwt_size) {
+	typedef ogengine_result_t (__cdecl *fn_t)(const char*, const char*, char*, size_t);
 	static fn_t fn;
 	if (!fn) {
 		HMODULE h = GetModuleHandleA("star_api.dll");
-		if (h) fn = (fn_t)(void*)GetProcAddress(h, "star_api_authenticate_with_jwt_out");
+		if (h) fn = (fn_t)(void*)GetProcAddress(h, "ogengine_authenticate_with_jwt_out");
 	}
-	return fn ? fn(user, pass, jwt_buf, jwt_size) : (star_api_result_t)STAR_API_ERROR_NOT_INITIALIZED;
+	return fn ? fn(user, pass, jwt_buf, jwt_size) : (ogengine_result_t)OGENGINE_ERROR_NOT_INITIALIZED;
 }
-star_api_result_t star_api_authenticate_with_jwt_out(const char* user, const char* pass, char* jwt_buf, size_t jwt_size) { return star_api_authenticate_with_jwt_out_impl(user, pass, jwt_buf, jwt_size); }
+ogengine_result_t ogengine_authenticate_with_jwt_out(const char* user, const char* pass, char* jwt_buf, size_t jwt_size) { return ogengine_authenticate_with_jwt_out_impl(user, pass, jwt_buf, jwt_size); }
 
-static star_api_result_t star_api_set_saved_session_impl(const char* jwt) {
-	typedef star_api_result_t (__cdecl *fn_t)(const char*);
+static ogengine_result_t ogengine_set_saved_session_impl(const char* jwt) {
+	typedef ogengine_result_t (__cdecl *fn_t)(const char*);
 	static fn_t fn;
 	if (!fn) {
 		HMODULE h = GetModuleHandleA("star_api.dll");
-		if (h) fn = (fn_t)(void*)GetProcAddress(h, "star_api_set_saved_session");
+		if (h) fn = (fn_t)(void*)GetProcAddress(h, "ogengine_set_saved_session");
 	}
-	return fn ? fn(jwt) : (star_api_result_t)STAR_API_ERROR_NOT_INITIALIZED;
+	return fn ? fn(jwt) : (ogengine_result_t)OGENGINE_ERROR_NOT_INITIALIZED;
 }
-star_api_result_t star_api_set_saved_session(const char* jwt) { return star_api_set_saved_session_impl(jwt); }
+ogengine_result_t ogengine_set_saved_session(const char* jwt) { return ogengine_set_saved_session_impl(jwt); }
 
-static star_api_result_t star_api_restore_session_impl(void) {
-	typedef star_api_result_t (__cdecl *fn_t)(void);
+static ogengine_result_t ogengine_restore_session_impl(void) {
+	typedef ogengine_result_t (__cdecl *fn_t)(void);
 	static fn_t fn;
 	if (!fn) {
 		HMODULE h = GetModuleHandleA("star_api.dll");
-		if (h) fn = (fn_t)(void*)GetProcAddress(h, "star_api_restore_session");
+		if (h) fn = (fn_t)(void*)GetProcAddress(h, "ogengine_restore_session");
 	}
-	return fn ? fn() : (star_api_result_t)STAR_API_ERROR_NOT_INITIALIZED;
+	return fn ? fn() : (ogengine_result_t)OGENGINE_ERROR_NOT_INITIALIZED;
 }
-star_api_result_t star_api_restore_session(void) { return star_api_restore_session_impl(); }
+ogengine_result_t ogengine_restore_session(void) { return ogengine_restore_session_impl(); }
 
-static int star_api_get_current_username_impl(char* buf, size_t buf_size) {
+static int ogengine_get_current_username_impl(char* buf, size_t buf_size) {
 	typedef int (__cdecl *fn_t)(char*, size_t);
 	static fn_t fn;
 	if (!fn) {
 		HMODULE h = GetModuleHandleA("star_api.dll");
-		if (h) fn = (fn_t)(void*)GetProcAddress(h, "star_api_get_current_username");
+		if (h) fn = (fn_t)(void*)GetProcAddress(h, "ogengine_get_current_username");
 	}
 	return fn ? fn(buf, buf_size) : 0;
 }
-int star_api_get_current_username(char* buf, size_t buf_size) { return star_api_get_current_username_impl(buf, buf_size); }
+int ogengine_get_current_username(char* buf, size_t buf_size) { return ogengine_get_current_username_impl(buf, buf_size); }
 
-static int star_api_get_current_jwt_impl(char* buf, size_t buf_size) {
+static int ogengine_get_current_jwt_impl(char* buf, size_t buf_size) {
 	typedef int (__cdecl *fn_t)(char*, size_t);
 	static fn_t fn;
 	if (!fn) {
 		HMODULE h = GetModuleHandleA("star_api.dll");
-		if (h) fn = (fn_t)(void*)GetProcAddress(h, "star_api_get_current_jwt");
+		if (h) fn = (fn_t)(void*)GetProcAddress(h, "ogengine_get_current_jwt");
 	}
 	return fn ? fn(buf, buf_size) : 0;
 }
-int star_api_get_current_jwt(char* buf, size_t buf_size) { return star_api_get_current_jwt_impl(buf, buf_size); }
+int ogengine_get_current_jwt(char* buf, size_t buf_size) { return ogengine_get_current_jwt_impl(buf, buf_size); }
 
-static void star_api_set_refresh_token_impl(const char* refresh_token) {
+static void ogengine_set_refresh_token_impl(const char* refresh_token) {
 	typedef void (__cdecl *fn_t)(const char*);
 	static fn_t fn;
 	if (!fn) {
 		HMODULE h = GetModuleHandleA("star_api.dll");
-		if (h) fn = (fn_t)(void*)GetProcAddress(h, "star_api_set_refresh_token");
+		if (h) fn = (fn_t)(void*)GetProcAddress(h, "ogengine_set_refresh_token");
 	}
 	if (fn) fn(refresh_token);
 }
-void star_api_set_refresh_token(const char* refresh_token) { star_api_set_refresh_token_impl(refresh_token); }
+void ogengine_set_refresh_token(const char* refresh_token) { ogengine_set_refresh_token_impl(refresh_token); }
 
-static int star_api_get_current_refresh_token_impl(char* buf, size_t buf_size) {
+static int ogengine_get_current_refresh_token_impl(char* buf, size_t buf_size) {
 	typedef int (__cdecl *fn_t)(char*, size_t);
 	static fn_t fn;
 	if (!fn) {
 		HMODULE h = GetModuleHandleA("star_api.dll");
-		if (h) fn = (fn_t)(void*)GetProcAddress(h, "star_api_get_current_refresh_token");
+		if (h) fn = (fn_t)(void*)GetProcAddress(h, "ogengine_get_current_refresh_token");
 	}
 	return fn ? fn(buf, buf_size) : 0;
 }
-int star_api_get_current_refresh_token(char* buf, size_t buf_size) { return star_api_get_current_refresh_token_impl(buf, buf_size); }
+int ogengine_get_current_refresh_token(char* buf, size_t buf_size) { return ogengine_get_current_refresh_token_impl(buf, buf_size); }
 
-static int star_api_is_session_expired_impl(void) {
+static int ogengine_is_session_expired_impl(void) {
 	typedef int (__cdecl *fn_t)(void);
 	static fn_t fn;
 	if (!fn) {
 		HMODULE h = GetModuleHandleA("star_api.dll");
-		if (h) fn = (fn_t)(void*)GetProcAddress(h, "star_api_is_session_expired");
+		if (h) fn = (fn_t)(void*)GetProcAddress(h, "ogengine_is_session_expired");
 	}
 	return fn ? fn() : 0;
 }
-int star_api_is_session_expired(void) { return star_api_is_session_expired_impl(); }
+int ogengine_is_session_expired(void) { return ogengine_is_session_expired_impl(); }
 
-static void star_api_request_inventory_in_background_impl(void) {
+static void ogengine_request_inventory_in_background_impl(void) {
 	typedef void (__cdecl *fn_t)(void);
 	static fn_t fn;
 	if (!fn) {
 		HMODULE h = GetModuleHandleA("star_api.dll");
-		if (h) fn = (fn_t)(void*)GetProcAddress(h, "star_api_request_inventory_in_background");
+		if (h) fn = (fn_t)(void*)GetProcAddress(h, "ogengine_request_inventory_in_background");
 	}
 	if (fn) fn();
 }
-void star_api_request_inventory_in_background(void) { star_api_request_inventory_in_background_impl(); }
+void ogengine_request_inventory_in_background(void) { ogengine_request_inventory_in_background_impl(); }
 #else
-/* RTLD_NEXT: avoid dlsym binding to these forwarders in the main binary (same issue as star_api_refresh_avatar_profile). */
-static star_api_result_t star_api_authenticate_with_jwt_out_impl(const char* user, const char* pass, char* jwt_buf, size_t jwt_size) {
-	typedef star_api_result_t (*fn_t)(const char*, const char*, char*, size_t);
+/* RTLD_NEXT: avoid dlsym binding to these forwarders in the main binary (same issue as ogengine_refresh_avatar_profile). */
+static ogengine_result_t ogengine_authenticate_with_jwt_out_impl(const char* user, const char* pass, char* jwt_buf, size_t jwt_size) {
+	typedef ogengine_result_t (*fn_t)(const char*, const char*, char*, size_t);
 	static fn_t fn;
 	if (!fn)
-		fn = (fn_t)dlsym(RTLD_NEXT, "star_api_authenticate_with_jwt_out");
-	return fn ? fn(user, pass, jwt_buf, jwt_size) : (star_api_result_t)STAR_API_ERROR_NOT_INITIALIZED;
+		fn = (fn_t)dlsym(RTLD_NEXT, "ogengine_authenticate_with_jwt_out");
+	return fn ? fn(user, pass, jwt_buf, jwt_size) : (ogengine_result_t)OGENGINE_ERROR_NOT_INITIALIZED;
 }
-star_api_result_t star_api_authenticate_with_jwt_out(const char* user, const char* pass, char* jwt_buf, size_t jwt_size) { return star_api_authenticate_with_jwt_out_impl(user, pass, jwt_buf, jwt_size); }
+ogengine_result_t ogengine_authenticate_with_jwt_out(const char* user, const char* pass, char* jwt_buf, size_t jwt_size) { return ogengine_authenticate_with_jwt_out_impl(user, pass, jwt_buf, jwt_size); }
 
-static star_api_result_t star_api_set_saved_session_impl(const char* jwt) {
-	typedef star_api_result_t (*fn_t)(const char*);
+static ogengine_result_t ogengine_set_saved_session_impl(const char* jwt) {
+	typedef ogengine_result_t (*fn_t)(const char*);
 	static fn_t fn;
 	if (!fn)
-		fn = (fn_t)dlsym(RTLD_NEXT, "star_api_set_saved_session");
-	return fn ? fn(jwt) : (star_api_result_t)STAR_API_ERROR_NOT_INITIALIZED;
+		fn = (fn_t)dlsym(RTLD_NEXT, "ogengine_set_saved_session");
+	return fn ? fn(jwt) : (ogengine_result_t)OGENGINE_ERROR_NOT_INITIALIZED;
 }
-star_api_result_t star_api_set_saved_session(const char* jwt) { return star_api_set_saved_session_impl(jwt); }
+ogengine_result_t ogengine_set_saved_session(const char* jwt) { return ogengine_set_saved_session_impl(jwt); }
 
-static star_api_result_t star_api_restore_session_impl(void) {
-	typedef star_api_result_t (*fn_t)(void);
+static ogengine_result_t ogengine_restore_session_impl(void) {
+	typedef ogengine_result_t (*fn_t)(void);
 	static fn_t fn;
 	if (!fn)
-		fn = (fn_t)dlsym(RTLD_NEXT, "star_api_restore_session");
-	return fn ? fn() : (star_api_result_t)STAR_API_ERROR_NOT_INITIALIZED;
+		fn = (fn_t)dlsym(RTLD_NEXT, "ogengine_restore_session");
+	return fn ? fn() : (ogengine_result_t)OGENGINE_ERROR_NOT_INITIALIZED;
 }
-star_api_result_t star_api_restore_session(void) { return star_api_restore_session_impl(); }
+ogengine_result_t ogengine_restore_session(void) { return ogengine_restore_session_impl(); }
 
-static int star_api_get_current_username_impl(char* buf, size_t buf_size) {
+static int ogengine_get_current_username_impl(char* buf, size_t buf_size) {
 	typedef int (*fn_t)(char*, size_t);
 	static fn_t fn;
 	if (!fn)
-		fn = (fn_t)dlsym(RTLD_NEXT, "star_api_get_current_username");
+		fn = (fn_t)dlsym(RTLD_NEXT, "ogengine_get_current_username");
 	return fn ? fn(buf, buf_size) : 0;
 }
-int star_api_get_current_username(char* buf, size_t buf_size) { return star_api_get_current_username_impl(buf, buf_size); }
+int ogengine_get_current_username(char* buf, size_t buf_size) { return ogengine_get_current_username_impl(buf, buf_size); }
 
-static int star_api_get_current_jwt_impl(char* buf, size_t buf_size) {
+static int ogengine_get_current_jwt_impl(char* buf, size_t buf_size) {
 	typedef int (*fn_t)(char*, size_t);
 	static fn_t fn;
 	if (!fn)
-		fn = (fn_t)dlsym(RTLD_NEXT, "star_api_get_current_jwt");
+		fn = (fn_t)dlsym(RTLD_NEXT, "ogengine_get_current_jwt");
 	return fn ? fn(buf, buf_size) : 0;
 }
-int star_api_get_current_jwt(char* buf, size_t buf_size) { return star_api_get_current_jwt_impl(buf, buf_size); }
+int ogengine_get_current_jwt(char* buf, size_t buf_size) { return ogengine_get_current_jwt_impl(buf, buf_size); }
 
-static void star_api_set_refresh_token_impl(const char* refresh_token) {
+static void ogengine_set_refresh_token_impl(const char* refresh_token) {
 	typedef void (*fn_t)(const char*);
 	static fn_t fn;
 	if (!fn)
-		fn = (fn_t)dlsym(RTLD_NEXT, "star_api_set_refresh_token");
+		fn = (fn_t)dlsym(RTLD_NEXT, "ogengine_set_refresh_token");
 	if (fn)
 		fn(refresh_token);
 }
-void star_api_set_refresh_token(const char* refresh_token) { star_api_set_refresh_token_impl(refresh_token); }
+void ogengine_set_refresh_token(const char* refresh_token) { ogengine_set_refresh_token_impl(refresh_token); }
 
-static int star_api_get_current_refresh_token_impl(char* buf, size_t buf_size) {
+static int ogengine_get_current_refresh_token_impl(char* buf, size_t buf_size) {
 	typedef int (*fn_t)(char*, size_t);
 	static fn_t fn;
 	if (!fn)
-		fn = (fn_t)dlsym(RTLD_NEXT, "star_api_get_current_refresh_token");
+		fn = (fn_t)dlsym(RTLD_NEXT, "ogengine_get_current_refresh_token");
 	return fn ? fn(buf, buf_size) : 0;
 }
-int star_api_get_current_refresh_token(char* buf, size_t buf_size) { return star_api_get_current_refresh_token_impl(buf, buf_size); }
+int ogengine_get_current_refresh_token(char* buf, size_t buf_size) { return ogengine_get_current_refresh_token_impl(buf, buf_size); }
 
-static int star_api_is_session_expired_impl(void) {
+static int ogengine_is_session_expired_impl(void) {
 	typedef int (*fn_t)(void);
 	static fn_t fn;
 	if (!fn)
-		fn = (fn_t)dlsym(RTLD_NEXT, "star_api_is_session_expired");
+		fn = (fn_t)dlsym(RTLD_NEXT, "ogengine_is_session_expired");
 	return fn ? fn() : 0;
 }
-int star_api_is_session_expired(void) { return star_api_is_session_expired_impl(); }
+int ogengine_is_session_expired(void) { return ogengine_is_session_expired_impl(); }
 
-static void star_api_request_inventory_in_background_impl(void) {
+static void ogengine_request_inventory_in_background_impl(void) {
 	typedef void (*fn_t)(void);
 	static fn_t fn;
 	if (!fn)
-		fn = (fn_t)dlsym(RTLD_NEXT, "star_api_request_inventory_in_background");
+		fn = (fn_t)dlsym(RTLD_NEXT, "ogengine_request_inventory_in_background");
 	if (fn)
 		fn();
 }
-void star_api_request_inventory_in_background(void) { star_api_request_inventory_in_background_impl(); }
+void ogengine_request_inventory_in_background(void) { ogengine_request_inventory_in_background_impl(); }
 #endif
 #endif
 
@@ -370,7 +370,7 @@ static int OQ_IsOasisCanonicalPowerupInventoryName(const char* name) {
         || OQ_ContainsNoCase(name, "RingShadows");
 }
 
-/** Called from sync worker after each star_api_add_item; logs result to console only when star debug is on. */
+/** Called from sync worker after each ogengine_add_item; logs result to console only when star debug is on. */
 static void OQ_AddItemLogCb(const char* item_name, int success, const char* error_message, void* user_data) {
     (void)user_data;
     if (!g_star_debug_logging)
@@ -381,11 +381,11 @@ static void OQ_AddItemLogCb(const char* item_name, int success, const char* erro
         Con_Printf("OQuake: add_item '%s' failed: %s\n", item_name ? item_name : "(null)", error_message && error_message[0] ? error_message : "unknown error");
 }
 
-static star_api_config_t g_star_config;
+static ogengine_config_t g_star_config;
 static int g_star_initialized = 0;
 /** 1 only after user has run "star beamin" and it succeeded (or async auth callback). Used to gate mint/add so we do not mint shells/shotgun etc. at startup before beamin. */
 static int g_star_beamed_in = 0;
-/** Obsolete: was used to avoid calling star_api_refresh_avatar_xp() twice; now we only call star_api_refresh_avatar_profile() on beam-in. */
+/** Obsolete: was used to avoid calling ogengine_refresh_avatar_xp() twice; now we only call ogengine_refresh_avatar_profile() on beam-in. */
 static int g_star_refresh_xp_called_this_session = 0;
 /** Set by STAR API callback when profile refresh (XP + active quest/objective) completes. Main thread reads this in OQuake_STAR_PollItems and restores tracker + invalidates quest cache. */
 static volatile int g_star_profile_loaded_pending = 0;
@@ -445,14 +445,14 @@ extern void Key_ClearStates(void);
 cvar_t oasis_star_anorak_face = {"oasis_star_anorak_face", "0", 0}; /* Runtime state - not archived */
 cvar_t oasis_star_beam_face = {"oasis_star_beam_face", "1", CVAR_ARCHIVE};
 cvar_t oquake_star_config_file = {"oquake_star_config_file", "json", CVAR_ARCHIVE}; /* "json" or "cfg" - which config file to use */
-cvar_t oquake_star_api_url = {"oquake_star_api_url", "https://oasisweb4.com/api/star", CVAR_ARCHIVE};
+cvar_t oquake_ogengine_url = {"oquake_ogengine_url", "https://oasisweb4.com/api/star", CVAR_ARCHIVE};
 cvar_t oquake_oasis_api_url = {"oquake_oasis_api_url", "https://oasisweb4.com", CVAR_ARCHIVE};
 /* "remote" = HTTP WEB5/WEB4 (default). "native" = in-process OASIS (requires star_api built with HyperDrive; default DLL fails init with clear error). */
 cvar_t oquake_star_transport = {"oquake_star_transport", "remote", CVAR_ARCHIVE};
 cvar_t oquake_oasis_dna_path = {"oquake_oasis_dna_path", "", CVAR_ARCHIVE};
 cvar_t oquake_star_username = {"oquake_star_username", "", 0};
 cvar_t oquake_star_password = {"oquake_star_password", "", 0};
-cvar_t oquake_star_api_key = {"oquake_star_api_key", "", 0};
+cvar_t oquake_ogengine_key = {"oquake_ogengine_key", "", 0};
 cvar_t oquake_star_avatar_id = {"oquake_star_avatar_id", "", 0};
 /* Stack (1) = each pickup adds to quantity; Unlock (0) = one per type. Ammo always stacks. Default 1. */
 cvar_t oquake_star_stack_armor = {"oquake_star_stack_armor", "1", CVAR_ARCHIVE};
@@ -481,7 +481,7 @@ cvar_t oquake_star_use_powerup_on_pickup = {"oquake_star_use_powerup_on_pickup",
 /* HUD toggles (same idea as ODOOM odoom_hud_show_xp / odoom_hud_show_beamed); X / B edge-triggered in draw path. */
 cvar_t oquake_hud_show_xp = {"oquake_hud_show_xp", "1", CVAR_ARCHIVE};
 cvar_t oquake_hud_show_beamed = {"oquake_hud_show_beamed", "1", CVAR_ARCHIVE};
-/* 1 = console + star_api_log cross-game beam transfer diagnostics (set oquake_star_cross_game_log 1). */
+/* 1 = console + ogengine_log cross-game beam transfer diagnostics (set oquake_star_cross_game_log 1). */
 cvar_t oquake_star_cross_game_log = {"oquake_star_cross_game_log", "0", CVAR_ARCHIVE};
 
 enum {
@@ -548,12 +548,12 @@ typedef struct oquake_inventory_entry_s {
 static oquake_inventory_entry_t g_inventory_entries[OQ_MAX_INVENTORY_ITEMS];
 static int g_inventory_count = 0;
 
-/* All sync, local delta array, and cache merge are done in the C# client. OQuake only calls star_api_queue_add_item on pickup and star_api_get_inventory to load. */
+/* All sync, local delta array, and cache merge are done in the C# client. OQuake only calls ogengine_queue_add_item on pickup and ogengine_get_inventory to load. */
 static int g_inventory_active_tab = OQ_TAB_KEYS;
 static qboolean g_inventory_open = false;
 static double g_inventory_last_refresh = 0.0;
 /* Callback runs on C# thread pool; main thread reads these. Use volatile so main thread sees updates (avoids hang/crash on some platforms). */
-static volatile int g_inventory_refresh_pending = 0;  /* set when operation_callback(STAR_API_OP_GET_INVENTORY) fires */
+static volatile int g_inventory_refresh_pending = 0;  /* set when operation_callback(OGENGINE_OP_GET_INVENTORY) fires */
 static volatile int g_inventory_requested = 0;        /* 1 after request_inventory_in_background until callback fires (show Loading...) */
 static char g_inventory_status[128] = "STAR inventory unavailable.";
 static int g_inventory_selected_row = 0;
@@ -718,9 +718,9 @@ static int OQ_AddInventoryUnlockIfMissing(const char* item_name, const char* des
     if (send_to_addr && !send_to_addr[0]) send_to_addr = NULL;
     int do_mint = OQ_DoMintForItemType(item_type);
     if (do_mint)
-        star_api_queue_pickup_with_mint(item_name, description ? description : "", "Quake", item_type ? item_type : "Item", 1, provider, send_to_addr, 1);
+        ogengine_queue_pickup_with_mint(item_name, description ? description : "", "Quake", item_type ? item_type : "Item", 1, provider, send_to_addr, 1);
     else
-        star_api_queue_add_item(item_name, description ? description : "", "Quake", item_type ? item_type : "Item", NULL, 1, 1);
+        ogengine_queue_add_item(item_name, description ? description : "", "Quake", item_type ? item_type : "Item", NULL, 1, 1);
     return 1;
 }
 static int OQ_AddInventoryEvent(const char* item_prefix, const char* description, const char* item_type)
@@ -739,9 +739,9 @@ static int OQ_AddInventoryEvent(const char* item_prefix, const char* description
     if (send_to_addr && !send_to_addr[0]) send_to_addr = NULL;
     int do_mint = OQ_DoMintForItemType(item_type);
     if (do_mint)
-        star_api_queue_pickup_with_mint(item_prefix, description ? description : "", "Quake", item_type ? item_type : "Item", 1, provider, send_to_addr, delta);
+        ogengine_queue_pickup_with_mint(item_prefix, description ? description : "", "Quake", item_type ? item_type : "Item", 1, provider, send_to_addr, delta);
     else
-        star_api_queue_add_item(item_prefix, description ? description : "", "Quake", item_type ? item_type : "Item", NULL, delta, 1);
+        ogengine_queue_add_item(item_prefix, description ? description : "", "Quake", item_type ? item_type : "Item", NULL, delta, 1);
     return 1;
 }
 
@@ -813,7 +813,7 @@ static int OQ_KeybindingReferencesCommand(int key, const char* cmd)
 /** Shared cleanup when quest popup closes (Q, I, or leaving a map). Clears STAR flag and quest-list signature state. */
 static void OQ_OnQuestPopupClosed(void)
 {
-    star_api_set_quest_popup_open(0);
+    ogengine_set_quest_popup_open(0);
     g_quest_popup_suppress_enter_frames = 0;
     g_quest_status_message[0] = '\0';
     g_quest_status_frames = 0;
@@ -1093,10 +1093,10 @@ static void OQ_SendSelectedItem(void)
 
     {
         const char* item_id = (item->id[0] != '\0') ? (const char*)item->id : NULL;
-        if (star_sync_send_item_in_progress()) {
+        if (ogengine_sync_send_item_in_progress()) {
             q_strlcpy(g_inventory_status, "Send already in progress.", sizeof(g_inventory_status));
         } else {
-            star_sync_send_item_start(g_inventory_send_target, item->name, qty,
+            ogengine_sync_send_item_start(g_inventory_send_target, item->name, qty,
                 (g_inventory_send_popup == OQ_SEND_POPUP_CLAN) ? 1 : 0, item_id, OQ_OnSendItemDone, NULL);
             q_strlcpy(g_inventory_status, "Sending...", sizeof(g_inventory_status));
         }
@@ -1196,12 +1196,12 @@ static void OQ_ApplyHealthOrArmor(const char* name, const char* type, const char
     }
 }
 
-/** Called from main thread by star_sync_pump() when use-item from overlay (E key) completes. Apply health/armor and refresh so qty/removal is correct (like ODOOM). */
+/** Called from main thread by ogengine_sync_pump() when use-item from overlay (E key) completes. Apply health/armor and refresh so qty/removal is correct (like ODOOM). */
 static void OQ_OnUseItemFromOverlayDone(void* user_data) {
     int success = 0;
     char err_buf[384] = {0};
     (void)user_data;
-    if (!star_sync_use_item_get_result(&success, err_buf, sizeof(err_buf)))
+    if (!ogengine_sync_use_item_get_result(&success, err_buf, sizeof(err_buf)))
         return;
     OQ_StarDebugLog("UseItem callback: success=%d name='%s' err='%s'", success, g_oq_use_pending_name, err_buf[0] ? err_buf : "(none)");
     if (success && g_oq_use_pending_name[0] != '\0') {
@@ -1247,7 +1247,7 @@ static void OQ_UseSelectedItem(void)
             q_strlcpy(g_inventory_status, toast_msg, sizeof(g_inventory_status));
         return;
     }
-    if (star_sync_use_item_in_progress()) {
+    if (ogengine_sync_use_item_in_progress()) {
         q_strlcpy(g_inventory_status, "Use in progress...", sizeof(g_inventory_status));
         OQ_StarDebugLog("UseItem (E key): blocked (use already in progress)");
         return;
@@ -1256,7 +1256,7 @@ static void OQ_UseSelectedItem(void)
     q_strlcpy(g_oq_use_pending_type, item->item_type, sizeof(g_oq_use_pending_type));
     q_strlcpy(g_oq_use_pending_description, item->description, sizeof(g_oq_use_pending_description));
     OQ_StarDebugLog("UseItem (E key): starting async name='%s' type='%s' context=inventory_overlay", item->name, item->item_type[0] ? item->item_type : "");
-    star_sync_use_item_start(item->name, "inventory_overlay", OQ_OnUseItemFromOverlayDone, NULL);
+    ogengine_sync_use_item_start(item->name, "inventory_overlay", OQ_OnUseItemFromOverlayDone, NULL);
     q_snprintf(g_inventory_status, sizeof(g_inventory_status), "Using: %s...", item->name);
 }
 
@@ -1296,7 +1296,7 @@ static void OQ_UseHealth_f(void) {
     const char* toast_msg = NULL;
     OQ_StarDebugLog("UseHealth (C key): invoked");
     if (!g_star_initialized) { Con_Printf("STAR not initialized. Use star beamin.\n"); OQ_StarDebugLog("UseHealth: skip (not initialized)"); return; }
-    if (star_sync_use_item_in_progress()) { Con_Printf("Use in progress...\n"); OQ_StarDebugLog("UseHealth: skip (use in progress)"); return; }
+    if (ogengine_sync_use_item_in_progress()) { Con_Printf("Use in progress...\n"); OQ_StarDebugLog("UseHealth: skip (use in progress)"); return; }
     OQ_RefreshOverlayFromClient();
     const oquake_inventory_entry_t* item = OQ_FindFirstHealthEntry();
     if (!item) { Con_Printf("No health item in STAR inventory.\n"); OQ_StarDebugLog("UseHealth: no health item found (g_inventory_count=%d)", g_inventory_count); return; }
@@ -1310,7 +1310,7 @@ static void OQ_UseHealth_f(void) {
     q_strlcpy(g_oq_use_pending_type, item->item_type, sizeof(g_oq_use_pending_type));
     q_strlcpy(g_oq_use_pending_description, item->description, sizeof(g_oq_use_pending_description));
     OQ_StarDebugLog("UseHealth: starting async name='%s' context=oquake_use_health", item->name);
-    star_sync_use_item_start(item->name, "oquake_use_health", OQ_OnUseItemFromOverlayDone, NULL);
+    ogengine_sync_use_item_start(item->name, "oquake_use_health", OQ_OnUseItemFromOverlayDone, NULL);
     Con_Printf("Using: %s...\n", item->name);
 }
 
@@ -1318,7 +1318,7 @@ static void OQ_UseArmor_f(void) {
     const char* toast_msg = NULL;
     OQ_StarDebugLog("UseArmor (F key): invoked");
     if (!g_star_initialized) { Con_Printf("STAR not initialized. Use star beamin.\n"); OQ_StarDebugLog("UseArmor: skip (not initialized)"); return; }
-    if (star_sync_use_item_in_progress()) { Con_Printf("Use in progress...\n"); OQ_StarDebugLog("UseArmor: skip (use in progress)"); return; }
+    if (ogengine_sync_use_item_in_progress()) { Con_Printf("Use in progress...\n"); OQ_StarDebugLog("UseArmor: skip (use in progress)"); return; }
     OQ_RefreshOverlayFromClient();
     const oquake_inventory_entry_t* item = OQ_FindFirstArmorEntry();
     if (!item) { Con_Printf("No armor item in STAR inventory.\n"); OQ_StarDebugLog("UseArmor: no armor item found (g_inventory_count=%d)", g_inventory_count); return; }
@@ -1332,7 +1332,7 @@ static void OQ_UseArmor_f(void) {
     q_strlcpy(g_oq_use_pending_type, item->item_type, sizeof(g_oq_use_pending_type));
     q_strlcpy(g_oq_use_pending_description, item->description, sizeof(g_oq_use_pending_description));
     OQ_StarDebugLog("UseArmor: starting async name='%s' context=oquake_use_armor", item->name);
-    star_sync_use_item_start(item->name, "oquake_use_armor", OQ_OnUseItemFromOverlayDone, NULL);
+    ogengine_sync_use_item_start(item->name, "oquake_use_armor", OQ_OnUseItemFromOverlayDone, NULL);
     Con_Printf("Using: %s...\n", item->name);
 }
 
@@ -1437,7 +1437,7 @@ static qboolean OQ_AllowPrivilegedCommands(void) {
 
 static void OQ_ResetCrossGameBeamTransferState(void);
 
-/** Called from main thread by star_sync_pump() when auth completes. */
+/** Called from main thread by ogengine_sync_pump() when auth completes. */
 static void OQ_OnAuthDone(void* user_data) {
     int success = 0;
     char username[64] = {0};
@@ -1446,16 +1446,16 @@ static void OQ_OnAuthDone(void* user_data) {
     (void)user_data;
     if (g_star_auth_timed_out) {
         g_star_auth_timed_out = 0;
-        (void)star_sync_auth_get_result(&success, username, sizeof(username), avatar_id, sizeof(avatar_id), error_msg, sizeof(error_msg));
+        (void)ogengine_sync_auth_get_result(&success, username, sizeof(username), avatar_id, sizeof(avatar_id), error_msg, sizeof(error_msg));
         return;  /* Late callback from timed-out attempt; drain result and ignore so retry already allowed */
     }
-    if (!star_sync_auth_get_result(&success, username, sizeof(username), avatar_id, sizeof(avatar_id), error_msg, sizeof(error_msg)))
+    if (!ogengine_sync_auth_get_result(&success, username, sizeof(username), avatar_id, sizeof(avatar_id), error_msg, sizeof(error_msg)))
         return;
     char jwt_buf[2048] = {0};
-    star_sync_auth_get_result_jwt(jwt_buf, sizeof(jwt_buf));
+    ogengine_sync_auth_get_result_jwt(jwt_buf, sizeof(jwt_buf));
     g_star_async_auth_pending = 0;
     if (success) {
-        star_api_log_to_file("[OQuake] Beamin: auth OK (async callback); loading profile");
+        ogengine_log_to_file("[OQuake] Beamin: auth OK (async callback); loading profile");
         /* Persist JWT from auth result so oasisstar.json has jwt_token for autobeamin (avoids relying on get_current_jwt export). */
         if (jwt_buf[0])
             q_strlcpy(g_oq_saved_jwt, jwt_buf, sizeof(g_oq_saved_jwt));
@@ -1470,23 +1470,23 @@ static void OQ_OnAuthDone(void* user_data) {
             Con_Printf("Warning: Could not get avatar ID: %s\n", error_msg[0] ? error_msg : "Unknown error");
         }
         OQ_ApplyBeamFacePreference();
-        /* Obsolete: star_api_refresh_avatar_xp() redundant with star_api_refresh_avatar_profile() which does same GET and also loads quest/objective + callback. */
+        /* Obsolete: ogengine_refresh_avatar_xp() redundant with ogengine_refresh_avatar_profile() which does same GET and also loads quest/objective + callback. */
         // if (!g_star_refresh_xp_called_this_session) {
         //     g_star_refresh_xp_called_this_session = 1;
-        //     star_api_refresh_avatar_xp();
+        //     ogengine_refresh_avatar_xp();
         // }
         /* Load avatar (XP + active quest/objective) and restore tracker state. */
-        star_api_refresh_avatar_profile();
-        star_api_log_to_file("[OQuake] Beamin (auth callback): profile refresh started");
+        ogengine_refresh_avatar_profile();
+        ogengine_log_to_file("[OQuake] Beamin (auth callback): profile refresh started");
         {
             char qid[64] = {0};
             char oid[64] = {0};
-            if (star_api_get_active_quest_id(qid, sizeof(qid)) && qid[0]) {
+            if (ogengine_get_active_quest_id(qid, sizeof(qid)) && qid[0]) {
                 q_strlcpy(g_quest_tracker_id, qid, sizeof(g_quest_tracker_id));
                 g_quest_tracker_name[0] = '\0';  /* Filled when quest list loads */
                 g_quest_tracker_show = 1;
             }
-            if (star_api_get_active_objective_id(oid, sizeof(oid)) && oid[0])
+            if (ogengine_get_active_objective_id(oid, sizeof(oid)) && oid[0])
                 q_strlcpy(g_quest_tracker_active_objective_id, oid, sizeof(g_quest_tracker_active_objective_id));
         }
         g_star_beamed_in = 1;
@@ -1500,7 +1500,7 @@ static void OQ_OnAuthDone(void* user_data) {
         {
             char logb[384];
             q_snprintf(logb, sizeof(logb), "[OQuake] Beamin: auth failed (async): %s", msg);
-            star_api_log_to_file(logb);
+            ogengine_log_to_file(logb);
         }
         Con_Printf("Beam-in failed: %s\n", msg);
         {
@@ -1511,40 +1511,40 @@ static void OQ_OnAuthDone(void* user_data) {
     }
 }
 
-/** Operation callback: only treat as "profile loaded" when operation_type is STAR_API_OP_PROFILE_LOADED. Log only ProfileLoaded to file (not GET_INVENTORY failures) to avoid spam. */
-static void OQ_StarApiOperationCallback(star_api_result_t result, int operation_type, void* user_data) {
+/** Operation callback: only treat as "profile loaded" when operation_type is OGENGINE_OP_PROFILE_LOADED. Log only ProfileLoaded to file (not GET_INVENTORY failures) to avoid spam. */
+static void OQ_StarApiOperationCallback(ogengine_result_t result, int operation_type, void* user_data) {
     (void)user_data;
-    if (operation_type == STAR_API_OP_PROFILE_LOADED) {
+    if (operation_type == OGENGINE_OP_PROFILE_LOADED) {
         char buf[160];
-        q_snprintf(buf, sizeof(buf), "[OQuake] STAR API operation_callback result=%d op=%d (%s)", (int)result, operation_type, result == STAR_API_SUCCESS ? "Success" : "other");
-        star_api_log_to_file(buf);
+        q_snprintf(buf, sizeof(buf), "[OQuake] STAR API operation_callback result=%d op=%d (%s)", (int)result, operation_type, result == OGENGINE_SUCCESS ? "Success" : "other");
+        ogengine_log_to_file(buf);
     }
-    if (operation_type == STAR_API_OP_PROFILE_LOADED && result == STAR_API_SUCCESS)
+    if (operation_type == OGENGINE_OP_PROFILE_LOADED && result == OGENGINE_SUCCESS)
         g_star_profile_loaded_pending = 1;
-    if (operation_type == STAR_API_OP_PROFILE_LOADED && result != STAR_API_SUCCESS) {
+    if (operation_type == OGENGINE_OP_PROFILE_LOADED && result != OGENGINE_SUCCESS) {
         Con_Printf("Session restore failed (session may have expired). Use 'star beamin' to log in again.\n");
     }
-    if (operation_type == STAR_API_OP_GET_INVENTORY) {
-        star_item_list_t* list = NULL;
+    if (operation_type == OGENGINE_OP_GET_INVENTORY) {
+        ogengine_item_list_t* list = NULL;
         const char* err_msg = NULL;
-        if (result == STAR_API_SUCCESS)
-            star_api_get_inventory(&list);
-        else if (result == STAR_API_ERROR_NOT_INITIALIZED)
+        if (result == OGENGINE_SUCCESS)
+            ogengine_get_inventory(&list);
+        else if (result == OGENGINE_ERROR_NOT_INITIALIZED)
             err_msg = "Not initialized";
         else
-            err_msg = star_api_get_last_error();
-        star_sync_inventory_deliver_result(list, result, err_msg);
+            err_msg = ogengine_get_last_error();
+        ogengine_sync_inventory_deliver_result(list, result, err_msg);
         g_inventory_requested = 0;
         g_inventory_refresh_pending = 1;
     }
 }
 
-/** Called from main thread by star_sync_pump() when send-item completes. */
+/** Called from main thread by ogengine_sync_pump() when send-item completes. */
 static void OQ_OnSendItemDone(void* user_data) {
     int success = 0;
     char err_buf[384] = {0};
     (void)user_data;
-    if (!star_sync_send_item_get_result(&success, err_buf, sizeof(err_buf)))
+    if (!ogengine_sync_send_item_get_result(&success, err_buf, sizeof(err_buf)))
         return;
     if (success) {
         q_strlcpy(g_inventory_status, "Item sent.", sizeof(g_inventory_status));
@@ -1559,22 +1559,22 @@ static void OQ_OnSendItemDone(void* user_data) {
 static void OQ_CheckAuthenticationComplete(void) {
     if (!g_star_initialized)
         return;
-    star_sync_pump();
+    ogengine_sync_pump();
 }
 
 static void OQ_CheckInventoryRefreshComplete(void) {
     if (!g_star_initialized)
         return;
-    star_sync_pump();
+    ogengine_sync_pump();
 }
 
 /** Refresh overlay: non-blocking. If inventory callback already fired (g_inventory_refresh_pending), apply cache to overlay. Otherwise request in background only once (when not already requested); keep existing list while loading. */
 static void OQ_RefreshOverlayFromClient(void) {
     if (g_inventory_refresh_pending) {
-        star_item_list_t* list = NULL;
+        ogengine_item_list_t* list = NULL;
         g_inventory_refresh_pending = 0;
         g_inventory_count = 0;
-        if (star_api_get_inventory(&list) == STAR_API_SUCCESS && list) {
+        if (ogengine_get_inventory(&list) == OGENGINE_SUCCESS && list) {
             size_t i, n = list->count;
             /* Defensive: avoid null deref or huge loop if C# returns bad data */
             if (list->items && n <= OQ_MAX_INVENTORY_ITEMS * 2) {
@@ -1596,25 +1596,25 @@ static void OQ_RefreshOverlayFromClient(void) {
                     g_inventory_count++;
                 }
             }
-            star_api_free_item_list(list);
+            ogengine_free_item_list(list);
         }
     } else if (!g_inventory_requested && g_inventory_count == 0) {
         /* When not beamed in: never call into C# (avoids hang on Linux). Show empty inventory and return. */
         if (!star_initialized()) {
             q_strlcpy(g_inventory_status, "Not beamed in. Use 'star beamin' to log in.", sizeof(g_inventory_status));
             g_inventory_last_refresh = realtime;
-            if (star_sync_send_item_in_progress())
+            if (ogengine_sync_send_item_in_progress())
                 return;
             return;
         }
         /* No data yet (overlay just opened, and we are initialized): request once. */
-        star_api_request_inventory_in_background();
+        ogengine_request_inventory_in_background();
         g_inventory_requested = 1;
         q_strlcpy(g_inventory_status, "Loading...", sizeof(g_inventory_status));
     } else {
         /* Already have items or request in flight: re-read from cache so pickups (add_item merged in C#) show up. */
-        star_item_list_t* list = NULL;
-        if (star_api_get_inventory(&list) == STAR_API_SUCCESS && list && list->items) {
+        ogengine_item_list_t* list = NULL;
+        if (ogengine_get_inventory(&list) == OGENGINE_SUCCESS && list && list->items) {
             size_t i, n = list->count;
             if (n > OQ_MAX_INVENTORY_ITEMS * 2) n = OQ_MAX_INVENTORY_ITEMS * 2;
             g_inventory_count = 0;
@@ -1635,12 +1635,12 @@ static void OQ_RefreshOverlayFromClient(void) {
                 dst->quantity = list->items[i].quantity > 0 ? list->items[i].quantity : 1;
                 g_inventory_count++;
             }
-            star_api_free_item_list(list);
+            ogengine_free_item_list(list);
         }
     }
     g_inventory_last_refresh = realtime;
     /* Do not overwrite status when send is in progress so "Sending..." stays visible in bottom-right. */
-    if (star_sync_send_item_in_progress())
+    if (ogengine_sync_send_item_in_progress())
         return;
     if (g_inventory_requested)
         q_strlcpy(g_inventory_status, "Loading...", sizeof(g_inventory_status));
@@ -1659,9 +1659,9 @@ static void OQ_StartInventorySyncIfNeeded(void) {
 
 /** Refresh overlay from client (get_inventory returns API + pending merged in C#). */
 static void OQ_RefreshInventoryCache(void) {
-    if (star_sync_inventory_in_progress())
+    if (ogengine_sync_inventory_in_progress())
         return;
-    if (star_sync_auth_in_progress()) {
+    if (ogengine_sync_auth_in_progress()) {
         q_strlcpy(g_inventory_status, "Authenticating...", sizeof(g_inventory_status));
         return;
     }
@@ -1837,7 +1837,7 @@ static void OQ_ReloadConfig_f(void) {
     if (g_json_config_path[0]) {
         if (OQ_LoadJsonConfig(g_json_config_path)) {
             /* Re-apply the values to API config */
-            const char* config_url = oquake_star_api_url.string;
+            const char* config_url = oquake_ogengine_url.string;
             if (config_url && config_url[0]) {
                 g_star_config.base_url = config_url;
             }
@@ -1973,7 +1973,7 @@ static void OQ_CrossGameDbgThrottled(const char* msg) {
     {
         char logb[320];
         q_snprintf(logb, sizeof(logb), "[OQuake cross-game] %s", msg);
-        star_api_log_to_file(logb);
+        ogengine_log_to_file(logb);
     }
 }
 
@@ -1988,7 +1988,7 @@ static void OQ_CrossGameDbgPrintf(const char* fmt, ...) {
     buf[sizeof(buf) - 1] = '\0';
     Con_Printf("[OQuake cross-game] %s\n", buf);
     q_snprintf(logb, sizeof(logb), "[OQuake cross-game] %s", buf);
-    star_api_log_to_file(logb);
+    ogengine_log_to_file(logb);
 }
 
 static void OQ_CrossGamePairsClearTable(oq_cross_pair_t* tab, int* n) {
@@ -2175,7 +2175,7 @@ static int OQ_TryApplyCrossGameBeamInTransfers(void) {
     extern client_state_t cl;
     extern client_static_t cls;
     extern server_t sv;
-    star_item_list_t* list = NULL;
+    ogengine_item_list_t* list = NULL;
     size_t i;
     int applied = 0;
     int weapon_gives_total = 0;
@@ -2200,13 +2200,13 @@ static int OQ_TryApplyCrossGameBeamInTransfers(void) {
     }
     if (g_oq_doom_ammo_to_quake_n <= 0)
         OQ_InitCrossGameMapsToDefaults();
-    if (star_api_get_inventory(&list) != STAR_API_SUCCESS || !list) {
-        OQ_CrossGameDbgThrottled("skip: star_api_get_inventory failed or null list");
+    if (ogengine_get_inventory(&list) != OGENGINE_SUCCESS || !list) {
+        OQ_CrossGameDbgThrottled("skip: ogengine_get_inventory failed or null list");
         return 0;
     }
     if (list->count == 0) {
         g_oq_cross_empty_inventory_wait_frames++;
-        star_api_free_item_list(list);
+        ogengine_free_item_list(list);
         if (g_oq_cross_empty_inventory_wait_frames < 300) {
             if (OQ_CrossGameLogEnabled() && (g_oq_cross_empty_inventory_wait_frames == 1 || (g_oq_cross_empty_inventory_wait_frames % 60) == 0))
                 OQ_CrossGameDbgPrintf("waiting for inventory (empty list, frame %d/300)", g_oq_cross_empty_inventory_wait_frames);
@@ -2254,7 +2254,7 @@ static int OQ_TryApplyCrossGameBeamInTransfers(void) {
             if (g_star_debug_logging) {
                 char logb[384];
                 q_snprintf(logb, sizeof(logb), "[OQuake] Cross-game beam-in: +%d %s (from Doom \"%s\") -> local %s", qty, base, raw_name, mapped);
-                star_api_log_to_file(logb);
+                ogengine_log_to_file(logb);
             }
         }
         if (ammo_applied > 0)
@@ -2320,7 +2320,7 @@ static int OQ_TryApplyCrossGameBeamInTransfers(void) {
             if (g_star_debug_logging) {
                 char logb[384];
                 q_snprintf(logb, sizeof(logb), "[OQuake] Cross-game beam-in: weapon \"%s\" -> %s (give %s)", raw_name, mapped, giv);
-                star_api_log_to_file(logb);
+                ogengine_log_to_file(logb);
             }
         }
         if (weapon_gives > 0)
@@ -2330,7 +2330,7 @@ static int OQ_TryApplyCrossGameBeamInTransfers(void) {
     g_oq_cross_game_beam_transfer_done = 1;
     if (OQ_CrossGameLogEnabled())
         OQ_CrossGameDbgPrintf("transfer finished: applied=%d weapon_gives=%d", applied, weapon_gives_total);
-    star_api_free_item_list(list);
+    ogengine_free_item_list(list);
     return applied;
 }
 
@@ -2383,8 +2383,8 @@ static int OQ_LoadJsonConfig(const char *json_path) {
     char value[256];
     int loaded = 0;
     
-    if (OQ_ExtractJsonValue(json, "star_api_url", value, sizeof(value))) {
-        Cvar_Set("oquake_star_api_url", value);
+    if (OQ_ExtractJsonValue(json, "ogengine_url", value, sizeof(value))) {
+        Cvar_Set("oquake_ogengine_url", value);
         loaded = 1;
     }
     if (OQ_ExtractJsonValue(json, "oasis_api_url", value, sizeof(value))) {
@@ -2520,7 +2520,7 @@ static int OQ_LoadJsonConfig(const char *json_path) {
 /* Save config to oasisstar.json */
 static int OQ_SaveJsonConfig(const char *json_path) {
     const char *config_file = oquake_star_config_file.string;
-    const char *star_url = oquake_star_api_url.string;
+    const char *star_url = oquake_ogengine_url.string;
     const char *oasis_url = oquake_oasis_api_url.string;
     char existing_star_url[256] = {0};
     char existing_oasis_url[256] = {0};
@@ -2536,7 +2536,7 @@ static int OQ_SaveJsonConfig(const char *json_path) {
                     if (buf) {
                         size_t n = fread(buf, 1, (size_t)sz, in);
                         buf[n] = '\0';
-                        (void)OQ_ExtractJsonValue(buf, "star_api_url", existing_star_url, sizeof(existing_star_url));
+                        (void)OQ_ExtractJsonValue(buf, "ogengine_url", existing_star_url, sizeof(existing_star_url));
                         (void)OQ_ExtractJsonValue(buf, "oasis_api_url", existing_oasis_url, sizeof(existing_oasis_url));
                         free(buf);
                     }
@@ -2579,7 +2579,7 @@ static int OQ_SaveJsonConfig(const char *json_path) {
     fprintf(f, "{\n");
     fprintf(f, "  \"config_file\": \"%s\",\n", config_file && config_file[0] ? config_file : "json");
     fprintf(f, "  \"star_transport\": \"%s\",\n", (oquake_star_transport.string && oquake_star_transport.string[0]) ? oquake_star_transport.string : "remote");
-    fprintf(f, "  \"star_api_url\": \"%s\",\n", star_url ? star_url : "");
+    fprintf(f, "  \"ogengine_url\": \"%s\",\n", star_url ? star_url : "");
     fprintf(f, "  \"oasis_api_url\": \"%s\",\n", oasis_url ? oasis_url : "");
     fprintf(f, "  \"oasis_dna_path\": \"");
     if (oquake_oasis_dna_path.string && oquake_oasis_dna_path.string[0]) {
@@ -2630,13 +2630,13 @@ static int OQ_SaveJsonConfig(const char *json_path) {
     /* Persisted session (username + JWT) so user stays logged in between sessions. */
     if (g_star_initialized) {
         /* If JWT expired and refresh failed, clear saved tokens so we don't persist dead session to file. */
-        if (star_api_is_session_expired()) {
+        if (ogengine_is_session_expired()) {
             g_oq_saved_jwt[0] = '\0';
             g_oq_saved_refresh_token[0] = '\0';
         }
         char uname[128] = {0};
         char jwt[2048] = {0};
-        int got_username = (star_api_get_current_username((char*)uname, sizeof(uname)) > 0 && uname[0]);
+        int got_username = (ogengine_get_current_username((char*)uname, sizeof(uname)) > 0 && uname[0]);
         if (!got_username && g_star_username[0]) {
             /* Fallback: DLL may not export get_current_username (e.g. trimmed); use username we have from beamin. */
             q_strlcpy(uname, g_star_username, sizeof(uname));
@@ -2648,7 +2648,7 @@ static int OQ_SaveJsonConfig(const char *json_path) {
             { const char* p; for (p = uname; *p; p++) { if (*p == '"' || *p == '\\') fputc('\\', f); fputc((unsigned char)*p, f); } }
             fprintf(f, "\"");
         }
-        if (star_api_get_current_jwt((char*)jwt, sizeof(jwt)) > 0 && jwt[0]) {
+        if (ogengine_get_current_jwt((char*)jwt, sizeof(jwt)) > 0 && jwt[0]) {
             q_strlcpy(g_oq_saved_jwt, jwt, sizeof(g_oq_saved_jwt));
             fprintf(f, ",\n  \"jwt_token\": \"");
             { const char* p; for (p = jwt; *p; p++) { if (*p == '"' || *p == '\\') fputc('\\', f); fputc((unsigned char)*p, f); } }
@@ -2661,7 +2661,7 @@ static int OQ_SaveJsonConfig(const char *json_path) {
         }
         {
             char refresh_buf[2048] = {0};
-            if (star_api_get_current_refresh_token((char*)refresh_buf, sizeof(refresh_buf)) > 0 && refresh_buf[0]) {
+            if (ogengine_get_current_refresh_token((char*)refresh_buf, sizeof(refresh_buf)) > 0 && refresh_buf[0]) {
                 q_strlcpy(g_oq_saved_refresh_token, refresh_buf, sizeof(g_oq_saved_refresh_token));
                 fprintf(f, ",\n  \"refresh_token\": \"");
                 { const char* p; for (p = refresh_buf; *p; p++) { if (*p == '"' || *p == '\\') fputc('\\', f); fputc((unsigned char)*p, f); } }
@@ -2856,11 +2856,11 @@ static int OQ_SaveQuakeConfig(const char *cfg_path) {
         free(buf);
     }
     {
-        const char *star_url = oquake_star_api_url.string;
+        const char *star_url = oquake_ogengine_url.string;
         const char *oasis_url = oquake_oasis_api_url.string;
         fprintf(f, "\n// OQuake STAR API Configuration (auto-generated)\n");
         fprintf(f, "set oquake_star_config_file \"%s\"\n", oquake_star_config_file.string ? oquake_star_config_file.string : "json");
-        fprintf(f, "set oquake_star_api_url \"%s\"\n", star_url ? star_url : "");
+        fprintf(f, "set oquake_ogengine_url \"%s\"\n", star_url ? star_url : "");
         fprintf(f, "set oquake_oasis_api_url \"%s\"\n", oasis_url ? oasis_url : "");
         fprintf(f, "set oquake_star_transport \"%s\"\n", oquake_star_transport.string ? oquake_star_transport.string : "remote");
         fprintf(f, "set oquake_oasis_dna_path \"%s\"\n", oquake_oasis_dna_path.string ? oquake_oasis_dna_path.string : "");
@@ -2944,7 +2944,7 @@ static void OQ_SyncConfigFiles(const char *cfg_path, const char *json_path) {
  * Cmd_AddCommand(..., OQ_StarConfig_f) is used in OQuake_STAR_Init (MSVC needs def before use).
  *-----------------------------------------------------------------------------*/
 static void OQ_StarConfig_f(void) {
-    const char* star_url = oquake_star_api_url.string;
+    const char* star_url = oquake_ogengine_url.string;
     const char* oasis_url = oquake_oasis_api_url.string;
     int using_defaults = 0;
     if (star_url && star_url[0] && strcmp(star_url, "https://star-api.oasisplatform.world/api") == 0)
@@ -2963,7 +2963,7 @@ static void OQ_StarConfig_f(void) {
     Con_Printf("  OASIS API URL: %s\n", oasis_url && oasis_url[0] ? oasis_url : "(default: https://oasisweb4.com/api)");
     Con_Printf("  Username: %s\n", oquake_star_username.string && oquake_star_username.string[0] ? oquake_star_username.string : "(not set)");
     Con_Printf("  Password: %s\n", oquake_star_password.string && oquake_star_password.string[0] ? "***" : "(not set)");
-    Con_Printf("  API Key: %s\n", oquake_star_api_key.string && oquake_star_api_key.string[0] ? "***" : "(not set)");
+    Con_Printf("  API Key: %s\n", oquake_ogengine_key.string && oquake_ogengine_key.string[0] ? "***" : "(not set)");
     Con_Printf("  Avatar ID: %s\n", oquake_star_avatar_id.string && oquake_star_avatar_id.string[0] ? oquake_star_avatar_id.string : "(not set)");
     Con_Printf("  Beam face: %s\n", oasis_star_beam_face.value > 0.5f ? "on" : "off");
     Con_Printf("\n");
@@ -3015,9 +3015,9 @@ static void OQ_StarConfig_f(void) {
 }
 
 void OQuake_STAR_Init(void) {
-    star_sync_init();
-    star_sync_set_add_item_log_cb(OQ_AddItemLogCb, NULL);
-    star_api_result_t result;
+    ogengine_sync_init();
+    ogengine_sync_set_add_item_log_cb(OQ_AddItemLogCb, NULL);
+    ogengine_result_t result;
     const char* username;
     const char* password;
 
@@ -3025,13 +3025,13 @@ void OQuake_STAR_Init(void) {
     Cvar_SetValueQuick(&oasis_star_anorak_face, 0);
     Cvar_RegisterVariable(&oasis_star_beam_face);
     Cvar_RegisterVariable(&oquake_star_config_file); /* Register this first so we can check it */
-    Cvar_RegisterVariable(&oquake_star_api_url);
+    Cvar_RegisterVariable(&oquake_ogengine_url);
     Cvar_RegisterVariable(&oquake_oasis_api_url);
     Cvar_RegisterVariable(&oquake_star_transport);
     Cvar_RegisterVariable(&oquake_oasis_dna_path);
     Cvar_RegisterVariable(&oquake_star_username);
     Cvar_RegisterVariable(&oquake_star_password);
-    Cvar_RegisterVariable(&oquake_star_api_key);
+    Cvar_RegisterVariable(&oquake_ogengine_key);
     Cvar_RegisterVariable(&oquake_star_avatar_id);
     Cvar_RegisterVariable(&oquake_star_stack_armor);
     Cvar_RegisterVariable(&oquake_star_stack_weapons);
@@ -3174,8 +3174,8 @@ void OQuake_STAR_Init(void) {
                                 cvar_value[n] = 0;
                                 if (strcmp(cvar_name, "oquake_star_config_file") == 0) {
                                     Cvar_Set("oquake_star_config_file", cvar_value);
-                                } else if (strcmp(cvar_name, "oquake_star_api_url") == 0) {
-                                    Cvar_Set("oquake_star_api_url", cvar_value);
+                                } else if (strcmp(cvar_name, "oquake_ogengine_url") == 0) {
+                                    Cvar_Set("oquake_ogengine_url", cvar_value);
                                 } else if (strcmp(cvar_name, "oquake_oasis_api_url") == 0) {
                                     Cvar_Set("oquake_oasis_api_url", cvar_value);
                                 } else if (strcmp(cvar_name, "oasis_star_beam_face") == 0) {
@@ -3224,7 +3224,7 @@ void OQuake_STAR_Init(void) {
                 fclose(f);
                 config_loaded = 1;
                 Con_Printf("OQuake: Loaded config from: %s\n", found_cfg_path);
-                const char* star_url = oquake_star_api_url.string;
+                const char* star_url = oquake_ogengine_url.string;
                 const char* oasis_url = oquake_oasis_api_url.string;
                 if (star_url && star_url[0]) {
                     Con_Printf("OQuake: STAR API URL: %s\n", star_url);
@@ -3255,7 +3255,7 @@ void OQuake_STAR_Init(void) {
             if (OQ_LoadJsonConfig(found_json_path)) {
                 config_loaded = 1;
                 Con_Printf("OQuake: Loaded config from: %s\n", found_json_path);
-                const char* star_url = oquake_star_api_url.string;
+                const char* star_url = oquake_ogengine_url.string;
                 const char* oasis_url = oquake_oasis_api_url.string;
                 if (star_url && star_url[0]) {
                     Con_Printf("OQuake: STAR API URL: %s\n", star_url);
@@ -3313,8 +3313,8 @@ void OQuake_STAR_Init(void) {
                                 cvar_value[n] = 0;
                                 if (strcmp(cvar_name, "oquake_star_config_file") == 0) {
                                     Cvar_Set("oquake_star_config_file", cvar_value);
-                                } else if (strcmp(cvar_name, "oquake_star_api_url") == 0) {
-                                    Cvar_Set("oquake_star_api_url", cvar_value);
+                                } else if (strcmp(cvar_name, "oquake_ogengine_url") == 0) {
+                                    Cvar_Set("oquake_ogengine_url", cvar_value);
                                 } else if (strcmp(cvar_name, "oquake_oasis_api_url") == 0) {
                                     Cvar_Set("oquake_oasis_api_url", cvar_value);
                                 } else if (strcmp(cvar_name, "oasis_star_beam_face") == 0) {
@@ -3363,7 +3363,7 @@ void OQuake_STAR_Init(void) {
                 fclose(f);
                 config_loaded = 1;
                 Con_Printf("OQuake: Loaded config from: %s\n", found_cfg_path);
-                const char* star_url = oquake_star_api_url.string;
+                const char* star_url = oquake_ogengine_url.string;
                 const char* oasis_url = oquake_oasis_api_url.string;
                 if (star_url && star_url[0]) {
                     Con_Printf("OQuake: STAR API URL: %s\n", star_url);
@@ -3381,7 +3381,7 @@ void OQuake_STAR_Init(void) {
             if (OQ_LoadJsonConfig(found_json_path)) {
                 config_loaded = 1;
                 Con_Printf("OQuake: Loaded config from (fallback): %s\n", found_json_path);
-                const char* star_url = oquake_star_api_url.string;
+                const char* star_url = oquake_ogengine_url.string;
                 const char* oasis_url = oquake_oasis_api_url.string;
                 if (star_url && star_url[0]) {
                     Con_Printf("OQuake: STAR API URL: %s\n", star_url);
@@ -3435,8 +3435,8 @@ void OQuake_STAR_Init(void) {
                                 cvar_value[n] = 0;
                                 if (strcmp(cvar_name, "oquake_star_config_file") == 0) {
                                     Cvar_Set("oquake_star_config_file", cvar_value);
-                                } else if (strcmp(cvar_name, "oquake_star_api_url") == 0) {
-                                    Cvar_Set("oquake_star_api_url", cvar_value);
+                                } else if (strcmp(cvar_name, "oquake_ogengine_url") == 0) {
+                                    Cvar_Set("oquake_ogengine_url", cvar_value);
                                 } else if (strcmp(cvar_name, "oquake_oasis_api_url") == 0) {
                                     Cvar_Set("oquake_oasis_api_url", cvar_value);
                                 } else if (strcmp(cvar_name, "oasis_star_beam_face") == 0) {
@@ -3485,7 +3485,7 @@ void OQuake_STAR_Init(void) {
                 fclose(f);
                 config_loaded = 1;
                 Con_Printf("OQuake: Loaded config from (fallback): %s\n", found_cfg_path);
-                const char* star_url = oquake_star_api_url.string;
+                const char* star_url = oquake_ogengine_url.string;
                 const char* oasis_url = oquake_oasis_api_url.string;
                 if (star_url && star_url[0]) {
                     Con_Printf("OQuake: STAR API URL: %s\n", star_url);
@@ -3560,9 +3560,9 @@ void OQuake_STAR_Init(void) {
     }
 
     /* Load config: CVAR first, then env var, then default */
-    const char* config_url = oquake_star_api_url.string;
+    const char* config_url = oquake_ogengine_url.string;
     if (!config_url || !config_url[0]) {
-        const char* env_url = getenv("STAR_API_URL");
+        const char* env_url = getenv("OGENGINE_URL");
         if (env_url && env_url[0]) {
             config_url = env_url;
         } else {
@@ -3572,9 +3572,9 @@ void OQuake_STAR_Init(void) {
     g_star_config.base_url = config_url;
     
     /* API key: CVAR -> env var */
-    const char* config_api_key = oquake_star_api_key.string;
+    const char* config_api_key = oquake_ogengine_key.string;
     if (!config_api_key || !config_api_key[0]) {
-        config_api_key = getenv("STAR_API_KEY");
+        config_api_key = getenv("OGENGINE_KEY");
     }
     g_star_config.api_key = config_api_key;
     
@@ -3593,21 +3593,21 @@ void OQuake_STAR_Init(void) {
     g_star_config.oasis_dna_path = (oquake_oasis_dna_path.string && oquake_oasis_dna_path.string[0]) ? oquake_oasis_dna_path.string : NULL;
 
     printf("\n********** GAME LOAD **********\n");
-    result = star_api_init(&g_star_config);
-    if (result != STAR_API_SUCCESS) {
-        printf("OQuake STAR API: Failed to initialize: %s\n", star_api_get_last_error());
+    result = ogengine_init(&g_star_config);
+    if (result != OGENGINE_SUCCESS) {
+        printf("OQuake STAR API: Failed to initialize: %s\n", ogengine_get_last_error());
     } else {
-        star_api_set_operation_callback(OQ_StarApiOperationCallback, NULL);
+        ogengine_set_operation_callback(OQ_StarApiOperationCallback, NULL);
         /* Always (re)apply WEB4 OASIS URL so auth/refresh use the correct host. Required for token auto-renew on restore. */
         {
             const char *oasis_url = oquake_oasis_api_url.string;
-            const char *star_url = oquake_star_api_url.string;
+            const char *star_url = oquake_ogengine_url.string;
             if (oasis_url && oasis_url[0]) {
-                star_api_set_oasis_base_url(oasis_url);
+                ogengine_set_oasis_base_url(oasis_url);
             } else {
                 const char *oe = getenv("OASIS_WEB4_API_BASE_URL");
                 if (oe && oe[0])
-                    star_api_set_oasis_base_url(oe);
+                    ogengine_set_oasis_base_url(oe);
                 else if (g_oq_saved_jwt[0]) {
                     static int s_logged_oasis_missing;
                     if (!s_logged_oasis_missing) {
@@ -3619,7 +3619,7 @@ void OQuake_STAR_Init(void) {
             /* Local dev: if STAR API is localhost but OASIS is still production default, use local OASIS so refresh works. */
             if (g_oq_saved_jwt[0] && star_url && strstr(star_url, "localhost") &&
                 oasis_url && strstr(oasis_url, "oasisweb4.com")) {
-                star_api_set_oasis_base_url("http://localhost:5555");
+                ogengine_set_oasis_base_url("http://localhost:5555");
             }
         }
         /* Username: CVAR -> env var */
@@ -3633,44 +3633,44 @@ void OQuake_STAR_Init(void) {
             password = getenv("STAR_PASSWORD");
         }
         if (username && password) {
-            result = star_api_authenticate(username, password);
-            if (result == STAR_API_SUCCESS) {
+            result = ogengine_authenticate(username, password);
+            if (result == OGENGINE_SUCCESS) {
                 g_star_initialized = 1;
                 g_star_beamed_in = 1;
                 OQ_ResetCrossGameBeamTransferState();
-                star_api_refresh_avatar_profile();
-                star_api_log_to_file("[OQuake] Init (username+password): beamed_in=1, profile refresh started");
+                ogengine_refresh_avatar_profile();
+                ogengine_log_to_file("[OQuake] Init (username+password): beamed_in=1, profile refresh started");
                 printf("OQuake STAR API: Authenticated. Cross-game assets enabled.\n");
             } else {
-                printf("OQuake STAR API: SSO failed: %s\n", star_api_get_last_error());
+                printf("OQuake STAR API: SSO failed: %s\n", ogengine_get_last_error());
             }
         } else if (g_star_config.api_key && g_star_config.avatar_id) {
             g_star_initialized = 1;
             g_star_beamed_in = 1;
             OQ_ResetCrossGameBeamTransferState();
-            star_api_refresh_avatar_profile();
-            star_api_log_to_file("[OQuake] Init (API key+avatar_id): beamed_in=1, profile refresh started");
+            ogengine_refresh_avatar_profile();
+            ogengine_log_to_file("[OQuake] Init (API key+avatar_id): beamed_in=1, profile refresh started");
             printf("OQuake STAR API: Using API key. Cross-game assets enabled.\n");
         } else if (g_oq_saved_jwt[0]) {
             /* Restore session from oasisstar.json so user stays logged in between sessions. */
-            star_api_log_to_file("\n********** OASIS SESSION RESTORE START **********");
+            ogengine_log_to_file("\n********** OASIS SESSION RESTORE START **********");
             printf("\n********** OASIS SESSION RESTORE START **********\n");
-            result = star_api_set_saved_session(g_oq_saved_jwt);
-            if (result == STAR_API_SUCCESS) {
+            result = ogengine_set_saved_session(g_oq_saved_jwt);
+            if (result == OGENGINE_SUCCESS) {
                 if (g_oq_saved_refresh_token[0])
-                    star_api_set_refresh_token(g_oq_saved_refresh_token);
+                    ogengine_set_refresh_token(g_oq_saved_refresh_token);
                 g_star_initialized = 1;
                 OQ_ResetCrossGameBeamTransferState();
                 if (g_oq_saved_username[0])
                     q_strlcpy(g_star_username, g_oq_saved_username, sizeof(g_star_username));
-                star_api_restore_session();
-                star_api_log_to_file("[OQuake] Init (saved session): restore started, profile load will set beamed_in");
+                ogengine_restore_session();
+                ogengine_log_to_file("[OQuake] Init (saved session): restore started, profile load will set beamed_in");
                 printf("OQuake STAR API: Restoring saved session for %s...\n", g_oq_saved_username[0] ? g_oq_saved_username : "(avatar)");
             } else {
-                printf("OQuake STAR API: Saved session invalid: %s\n", star_api_get_last_error());
+                printf("OQuake STAR API: Saved session invalid: %s\n", ogengine_get_last_error());
             }
         } else {
-            printf("OQuake STAR API: Set STAR_USERNAME/STAR_PASSWORD or STAR_API_KEY/STAR_AVATAR_ID for cross-game keys.\n");
+            printf("OQuake STAR API: Set STAR_USERNAME/STAR_PASSWORD or OGENGINE_KEY/STAR_AVATAR_ID for cross-game keys.\n");
         }
     }
     /* OASIS / OQuake loading splash - same professional style as ODOOM */
@@ -3690,9 +3690,9 @@ void OQuake_STAR_Init(void) {
 
 void OQuake_STAR_Cleanup(void) {
     OQ_SaveStarConfigToFiles(); /* persist any STAR option changes on exit */
-    star_sync_cleanup();
+    ogengine_sync_cleanup();
     if (g_star_initialized) {
-        star_api_cleanup();
+        ogengine_cleanup();
         g_star_initialized = 0;
         Cvar_SetValueQuick(&oasis_star_anorak_face, 0);
         printf("OQuake STAR API: Cleaned up.\n");
@@ -3721,16 +3721,16 @@ void OQuake_STAR_OnKeyPickup(const char* key_name) {
         static const char OQUAKE_DEFAULT_QUEST_ID[] = "cross_dimensional_keycard_hunt";
         if (strcmp(key_name, OQUAKE_ITEM_SILVER_KEY) == 0) {
             Con_Printf("[Quests] Quake: completing objective quest=%s objective=quake_silver_key (silver key pickup)\n", OQUAKE_DEFAULT_QUEST_ID);
-            star_api_result_t r = star_api_complete_quest_objective(OQUAKE_DEFAULT_QUEST_ID, "quake_silver_key", "Quake");
-            if (r != STAR_API_SUCCESS)
-                Con_Printf("[Quests] Quake: complete_quest_objective failed: %s\n", star_api_get_last_error());
+            ogengine_result_t r = ogengine_complete_quest_objective(OQUAKE_DEFAULT_QUEST_ID, "quake_silver_key", "Quake");
+            if (r != OGENGINE_SUCCESS)
+                Con_Printf("[Quests] Quake: complete_quest_objective failed: %s\n", ogengine_get_last_error());
             else
                 g_quest_tracker_needs_refresh = 1;
         } else if (strcmp(key_name, OQUAKE_ITEM_GOLD_KEY) == 0) {
             Con_Printf("[Quests] Quake: completing objective quest=%s objective=quake_gold_key (gold key pickup)\n", OQUAKE_DEFAULT_QUEST_ID);
-            star_api_result_t r = star_api_complete_quest_objective(OQUAKE_DEFAULT_QUEST_ID, "quake_gold_key", "Quake");
-            if (r != STAR_API_SUCCESS)
-                Con_Printf("[Quests] Quake: complete_quest_objective failed: %s\n", star_api_get_last_error());
+            ogengine_result_t r = ogengine_complete_quest_objective(OQUAKE_DEFAULT_QUEST_ID, "quake_gold_key", "Quake");
+            if (r != OGENGINE_SUCCESS)
+                Con_Printf("[Quests] Quake: complete_quest_objective failed: %s\n", ogengine_get_last_error());
             else
                 g_quest_tracker_needs_refresh = 1;
         }
@@ -3766,14 +3766,14 @@ void OQuake_STAR_OnMonsterKilled(const char* monster_name) {
     if (!g_star_initialized) {
         Con_Printf("OQuake STAR: monster \"%s\" killed but not beamed in (no XP/mint)\n", monster_name);
         snprintf(star_log_buf, sizeof(star_log_buf), "OQUAKE: monster \"%s\" killed but not beamed in (no XP/mint)", monster_name);
-        star_api_log_to_file(star_log_buf);
+        ogengine_log_to_file(star_log_buf);
         return;
     }
     e = OQ_FindMonsterByEngineName(monster_name);
     if (!e) {
         Con_Printf("OQuake STAR: unknown monster \"%s\" (no XP/mint)\n", monster_name);
         snprintf(star_log_buf, sizeof(star_log_buf), "OQUAKE: unknown monster \"%s\" (no XP/mint)", monster_name);
-        star_api_log_to_file(star_log_buf);
+        ogengine_log_to_file(star_log_buf);
         return;
     }
     idx = (int)(e - OQUAKE_MONSTERS);
@@ -3781,8 +3781,8 @@ void OQuake_STAR_OnMonsterKilled(const char* monster_name) {
     prov = oquake_star_nft_provider.string && oquake_star_nft_provider.string[0] ? oquake_star_nft_provider.string : "SolanaOASIS";
     Con_Printf("OQuake STAR: monster kill queued: %s (%d XP, mint=%d)\n", e->display_name, e->xp, do_mint);
     snprintf(star_log_buf, sizeof(star_log_buf), "OQUAKE: monster kill queued: %s (%d XP, mint=%d)", e->display_name, e->xp, do_mint);
-    star_api_log_to_file(star_log_buf);
-    star_api_queue_monster_kill(e->engine_name, e->display_name, e->xp, e->is_boss, do_mint, prov, "OQUAKE");
+    ogengine_log_to_file(star_log_buf);
+    ogengine_queue_monster_kill(e->engine_name, e->display_name, e->xp, e->is_boss, do_mint, prov, "OQUAKE");
 }
 
 /* Hook: called from PF_Remove/PF_sv_makestatic (pr_cmds.c) as fallback. Primary path is SVC_KILLEDMONSTER in PF_sv_WriteByte. Dedupe same entity same frame. */
@@ -3938,7 +3938,7 @@ void OQuake_STAR_OnStatsChangedEx(
             int delta = new_armor - old_armor;
             const char* armor_name = (delta <= 100) ? "Green Armor" : (delta < 200) ? "Yellow Armor" : "Red Armor";
             q_snprintf(desc, sizeof(desc), "%s (+%d)", armor_name, delta);
-            star_api_queue_add_item(armor_name, desc, "Quake", "Armor", NULL, 1, 1);
+            ogengine_queue_add_item(armor_name, desc, "Quake", "Armor", NULL, 1, 1);
             added++;
             OQ_PickupLog("Stats: Armor +%d (%s) -> STAR", delta, armor_name);
         } else {
@@ -3955,11 +3955,11 @@ void OQuake_STAR_OnStatsChangedEx(
             int delta = new_health - old_health;
             if (delta >= 100) {
                 q_snprintf(desc, sizeof(desc), "Megahealth (+%d)", delta);
-                star_api_queue_add_item(OQ_QUAKE_NAME_MEGAHEALTH, desc, "Quake", "Powerup", NULL, 1, 1);
+                ogengine_queue_add_item(OQ_QUAKE_NAME_MEGAHEALTH, desc, "Quake", "Powerup", NULL, 1, 1);
                 OQ_PickupLog("Stats: Megahealth +%d -> STAR", delta);
             } else {
                 q_snprintf(desc, sizeof(desc), "Health (+%d)", delta);
-                star_api_queue_add_item("Health", desc, "Quake", "Health", NULL, 1, 1);
+                ogengine_queue_add_item("Health", desc, "Quake", "Health", NULL, 1, 1);
                 OQ_PickupLog("Stats: Health +%d -> STAR", delta);
             }
             added++;
@@ -3998,7 +3998,7 @@ static void OQ_QuestApplyKForQuestRow(const char* quest_id, const char* qstatus,
         q_strlcpy(g_quest_status_message, "Starting quest...", sizeof(g_quest_status_message));
         g_quest_status_frames = 600;
         q_strlcpy(g_quest_start_pending_id, quest_id, sizeof(g_quest_start_pending_id));
-        star_api_start_quest(quest_id);
+        ogengine_start_quest(quest_id);
         return;
     }
     if (strcmp(qstatus, "InProgress") == 0 || strcmp(qstatus, "1") == 0 ||
@@ -4015,9 +4015,9 @@ static void OQ_QuestApplyKForQuestRow(const char* quest_id, const char* qstatus,
             static char log_buf[512];
             const char* qn = g_quest_tracker_name[0] ? g_quest_tracker_name : "(none)";
             q_snprintf(log_buf, sizeof(log_buf), "[Quest] SAVE (K) quest_id=%s objective_id=%s quest_name=%s", g_quest_tracker_id, g_quest_tracker_active_objective_id, qn);
-            star_api_log_to_file(log_buf);
+            ogengine_log_to_file(log_buf);
         }
-        star_api_set_active_quest(g_quest_tracker_id, NULL);
+        ogengine_set_active_quest(g_quest_tracker_id, NULL);
     }
 }
 
@@ -4050,7 +4050,7 @@ static void OQ_PickupLog(const char* fmt, ...) {
     va_end(ap);
     if (g_star_debug_logging) {
         Con_Printf("[OQuake pickup] %s\n", buf);
-        star_api_log_to_file(buf);
+        ogengine_log_to_file(buf);
     }
 }
 
@@ -4063,7 +4063,7 @@ static void OQ_StarDebugLog(const char* fmt, ...) {
     vsnprintf(buf, sizeof(buf), fmt, ap);
     va_end(ap);
     Con_Printf("[STAR debug] %s\n", buf);
-    star_api_log_to_file(buf);
+    ogengine_log_to_file(buf);
 }
 
 /**
@@ -4339,9 +4339,9 @@ void OQuake_STAR_OnPickupLeftOnFloor(const char* item_name, const char* item_typ
     else
         q_snprintf(desc, sizeof(desc), "Pickup (engine left on floor) +%d", qty);
     if (OQ_DoMintForItemType(item_type ? item_type : "Item"))
-        star_api_queue_pickup_with_mint(item_name, desc, "Quake", item_type ? item_type : "Item", 1, oquake_star_nft_provider.string, oquake_star_send_to_address_after_minting.string, qty);
+        ogengine_queue_pickup_with_mint(item_name, desc, "Quake", item_type ? item_type : "Item", 1, oquake_star_nft_provider.string, oquake_star_send_to_address_after_minting.string, qty);
     else
-        star_api_queue_add_item(item_name, desc, "Quake", item_type ? item_type : "Item", NULL, qty, 1);
+        ogengine_queue_add_item(item_name, desc, "Quake", item_type ? item_type : "Item", NULL, qty, 1);
     q_strlcpy(g_star_last_pickup_name, item_name, sizeof(g_star_last_pickup_name));
     q_strlcpy(g_star_last_pickup_desc, desc, sizeof(g_star_last_pickup_desc));
     q_strlcpy(g_star_last_pickup_type, item_type ? item_type : "Item", sizeof(g_star_last_pickup_type));
@@ -4380,24 +4380,24 @@ void OQuake_STAR_PollItems(void) {
     static qboolean poll_need_spawn_baseline = true;
 
     /* Run async completions (auth, inventory, use_item) every frame so e.g. "star beamin" finishes even when console is open. */
-    star_sync_pump();
+    ogengine_sync_pump();
     /* Keep movement bind capture in sync every frame so closing a popup still restores WASD if the HUD draw path did not run (Linux / loading / menu). */
     OQ_UpdatePopupInputCapture();
 
-    /* If async auth was started but callback never fired (hang, or star_sync_pump never runs e.g. missing host.c patch), wall-clock timeout. */
+    /* If async auth was started but callback never fired (hang, or ogengine_sync_pump never runs e.g. missing host.c patch), wall-clock timeout. */
     if (g_star_async_auth_pending) {
         extern double realtime;
         double elapsed = realtime - g_star_async_auth_start_realtime;
         if (elapsed > OQ_BEAMIN_ASYNC_TIMEOUT_SEC) {
             g_star_async_auth_pending = 0;
             g_star_auth_timed_out = 1;  /* Ignore late callback from this attempt so retry can proceed */
-            star_sync_auth_force_reset();  /* Clear star_sync state so "star beamin" again is allowed */
+            ogengine_sync_auth_force_reset();  /* Clear star_sync state so "star beamin" again is allowed */
             {
                 char logb[512];
                 q_snprintf(logb, sizeof(logb),
-                    "[OQuake] Beamin: TIMEOUT after %.1fs — no main-thread auth callback (star_sync_pump never ran). Fix: OQuake_STAR_PollItems() must run every frame in vkQuake host.c after CL_ReadFromServer (BUILD_OQUAKE.sh unix patch or apply_oquake_to_vkquake.ps1). URIs can be correct; this is not a WEB4/WEB5 port issue.",
+                    "[OQuake] Beamin: TIMEOUT after %.1fs — no main-thread auth callback (ogengine_sync_pump never ran). Fix: OQuake_STAR_PollItems() must run every frame in vkQuake host.c after CL_ReadFromServer (BUILD_OQUAKE.sh unix patch or apply_oquake_to_vkquake.ps1). URIs can be correct; this is not a WEB4/WEB5 port issue.",
                     elapsed);
-                star_api_log_to_file(logb);
+                ogengine_log_to_file(logb);
             }
             Con_Printf("Beam-in failed: timeout (no response from server).\n");
             OQ_SetToastMessage("Beam-in failed: timeout (no response from server).");
@@ -4411,12 +4411,12 @@ void OQuake_STAR_PollItems(void) {
         {
             char qid[64] = {0};
             char oid[64] = {0};
-            if (star_api_get_active_quest_id(qid, sizeof(qid)) && qid[0]) {
+            if (ogengine_get_active_quest_id(qid, sizeof(qid)) && qid[0]) {
                 q_strlcpy(g_quest_tracker_id, qid, sizeof(g_quest_tracker_id));
                 g_quest_tracker_name[0] = '\0';  /* Filled by tracker draw from quest list when available */
                 g_quest_tracker_show = 1;
                 g_quest_tracker_active_display_index = -1;  /* Resolve from objective id in tracker draw */
-                star_api_log_to_file("[OQuake] Profile loaded: restored quest tracker from cache");
+                ogengine_log_to_file("[OQuake] Profile loaded: restored quest tracker from cache");
             } else {
                 /* Clear tracker so HUD shows current state (no quest), not stale data from previous session. */
                 g_quest_tracker_id[0] = '\0';
@@ -4424,22 +4424,22 @@ void OQuake_STAR_PollItems(void) {
                 g_quest_tracker_active_objective_id[0] = '\0';
                 g_quest_tracker_show = 1;
                 g_quest_tracker_active_display_index = -1;
-                star_api_log_to_file("[OQuake] Profile loaded: no active quest in cache");
+                ogengine_log_to_file("[OQuake] Profile loaded: no active quest in cache");
             }
-            if (star_api_get_active_objective_id(oid, sizeof(oid)) && oid[0]) {
+            if (ogengine_get_active_objective_id(oid, sizeof(oid)) && oid[0]) {
                 q_strlcpy(g_quest_tracker_active_objective_id, oid, sizeof(g_quest_tracker_active_objective_id));
                 g_quest_tracker_active_display_index = -1;
             }
             {
                 static char load_log[512];
                 q_snprintf(load_log, sizeof(load_log), "[Quest] LOAD (beam-in from API) quest_id=%s objective_id=%s (names filled when list loads)", qid[0] ? qid : "(none)", oid[0] ? oid : "(none)");
-                star_api_log_to_file(load_log);
+                ogengine_log_to_file(load_log);
             }
         }
-        star_api_invalidate_quest_cache();
-        star_api_refresh_quest_cache_in_background();  /* Start loading quest list so tracker can show name without opening popup */
-        star_api_request_inventory_in_background();    /* Start loading inventory so overlay and door checks have cache */
-        star_api_log_to_file("[OQuake] Profile loaded: quest cache invalidated, list will refetch");
+        ogengine_invalidate_quest_cache();
+        ogengine_refresh_quest_cache_in_background();  /* Start loading quest list so tracker can show name without opening popup */
+        ogengine_request_inventory_in_background();    /* Start loading inventory so overlay and door checks have cache */
+        ogengine_log_to_file("[OQuake] Profile loaded: quest cache invalidated, list will refetch");
         /* Persist session to oasisstar.json now so we stay logged in even if the game crashes before exit. */
         OQ_SaveStarConfigToFiles();
     }
@@ -4447,13 +4447,13 @@ void OQuake_STAR_PollItems(void) {
     /* Show mint result in console when background pickup-with-mint completes (NFT ID + Hash). */
     {
         char item_buf[256] = {0}, nft_buf[128] = {0}, hash_buf[256] = {0};
-        if (star_api_consume_last_mint_result(item_buf, sizeof(item_buf), nft_buf, sizeof(nft_buf), hash_buf, sizeof(hash_buf)))
+        if (ogengine_consume_last_mint_result(item_buf, sizeof(item_buf), nft_buf, sizeof(nft_buf), hash_buf, sizeof(hash_buf)))
             Con_Printf("NFT minted: %s | ID: %s | Hash: %s\n", item_buf, nft_buf, hash_buf[0] ? hash_buf : "(none)");
     }
     /* Show any background errors (mint/add_item failure or pickup not queued) in console. */
     {
         char err_buf[512] = {0};
-        if (star_api_consume_last_background_error(err_buf, sizeof(err_buf)))
+        if (ogengine_consume_last_background_error(err_buf, sizeof(err_buf)))
             Con_Printf("%s\n", err_buf);
     }
     /* Show STAR log messages in console when star debug is on (quests, XP refresh, monster kill, etc.). */
@@ -4463,7 +4463,7 @@ void OQuake_STAR_PollItems(void) {
         /* Never spin-drain unbounded logs in one frame; large bursts can stall the game loop. */
         const int max_logs_per_frame = g_star_debug_logging ? 25 : 64;
         for (i = 0; i < max_logs_per_frame; i++) {
-            if (!star_api_consume_console_log(log_buf, sizeof(log_buf)))
+            if (!ogengine_consume_console_log(log_buf, sizeof(log_buf)))
                 break;
             if (g_star_debug_logging)
                 Con_Printf("[STAR] %s\n", log_buf);
@@ -4474,7 +4474,7 @@ void OQuake_STAR_PollItems(void) {
     if (g_oq_reapply_json_frames == 0) {
         g_oq_reapply_json_frames = -1;
         if (g_json_config_path[0] && OQ_LoadJsonConfig(g_json_config_path)) {
-            const char* config_url = oquake_star_api_url.string;
+            const char* config_url = oquake_ogengine_url.string;
             if (config_url && config_url[0])
                 g_star_config.base_url = config_url;
         }
@@ -4554,12 +4554,12 @@ void OQuake_STAR_PollItems(void) {
     poll_prev_valid = 1;
 }
 
-/** Called from main thread by star_sync_pump() when use-item (door key) completes. */
+/** Called from main thread by ogengine_sync_pump() when use-item (door key) completes. */
 static void OQ_OnUseItemDone(void* user_data) {
     int success = 0;
     char err_buf[384] = {0};
     (void)user_data;
-    if (!star_sync_use_item_get_result(&success, err_buf, sizeof(err_buf)))
+    if (!ogengine_sync_use_item_get_result(&success, err_buf, sizeof(err_buf)))
         return;
     if (success)
         OQ_RefreshOverlayFromClient();
@@ -4580,27 +4580,27 @@ static int OQ_ItemNameContains(const char* item_name, const char* sub) {
 
 /** Silver doors: only silver_key. Gold doors: only gold_key. No Doom keycards. */
 static int OQ_FindKeyForDoor(const char* required_key_name, char* out_name, size_t out_size) {
-    star_item_list_t* list = NULL;
+    ogengine_item_list_t* list = NULL;
     size_t i;
     if (!required_key_name || !out_name || out_size < 2) return 0;
     out_name[0] = '\0';
-    if (star_api_get_inventory(&list) != STAR_API_SUCCESS || !list || !list->items)
+    if (ogengine_get_inventory(&list) != OGENGINE_SUCCESS || !list || !list->items)
         return 0;
     for (i = 0; i < list->count; i++) {
         const char* n = list->items[i].name;
         if (!n || !n[0]) continue;
         if (OQ_ItemNameContains(required_key_name, "silver") && q_strcasecmp(n, OQUAKE_ITEM_SILVER_KEY) == 0) {
             q_strlcpy(out_name, n, out_size);
-            star_api_free_item_list(list);
+            ogengine_free_item_list(list);
             return 1;
         }
         if (OQ_ItemNameContains(required_key_name, "gold") && q_strcasecmp(n, OQUAKE_ITEM_GOLD_KEY) == 0) {
             q_strlcpy(out_name, n, out_size);
-            star_api_free_item_list(list);
+            ogengine_free_item_list(list);
             return 1;
         }
     }
-    star_api_free_item_list(list);
+    ogengine_free_item_list(list);
     return 0;
 }
 
@@ -4611,7 +4611,7 @@ int OQuake_STAR_CheckDoorAccess(const char* door_targetname, const char* require
         return 0;
     if (!OQ_FindKeyForDoor(required_key_name, actual_name, sizeof(actual_name)))
         return 0;
-    star_sync_use_item_start(actual_name, door_targetname && door_targetname[0] ? door_targetname : "quake_door", OQ_OnUseItemDone, NULL);
+    ogengine_sync_use_item_start(actual_name, door_targetname && door_targetname[0] ? door_targetname : "quake_door", OQ_OnUseItemDone, NULL);
     return 1;
 }
 
@@ -4721,31 +4721,31 @@ void OQuake_STAR_Console_f(void) {
         if (strcmp(color, "silver") == 0) { name = OQUAKE_ITEM_SILVER_KEY; desc = get_key_description(name); }
         else if (strcmp(color, "gold") == 0) { name = OQUAKE_ITEM_GOLD_KEY; desc = get_key_description(name); }
         else { Con_Printf("Unknown keycard: %s. Use silver|gold.\n", color); return; }
-        star_api_queue_pickup_with_mint(name, desc, "Quake", "KeyItem", 1, NULL, NULL, 1);
-        star_api_result_t r = star_api_flush_add_item_jobs();
-        if (r == STAR_API_SUCCESS) {
+        ogengine_queue_pickup_with_mint(name, desc, "Quake", "KeyItem", 1, NULL, NULL, 1);
+        ogengine_result_t r = ogengine_flush_add_item_jobs();
+        if (r == OGENGINE_SUCCESS) {
             Con_Printf("Added %s to STAR inventory.\n", name);
             q_strlcpy(g_star_last_pickup_name, name, sizeof(g_star_last_pickup_name));
             q_strlcpy(g_star_last_pickup_desc, desc ? desc : "", sizeof(g_star_last_pickup_desc));
             q_strlcpy(g_star_last_pickup_type, "KeyItem", sizeof(g_star_last_pickup_type));
             g_star_has_last_pickup = true;
-        } else Con_Printf("Failed: %s\n", star_api_get_last_error());
+        } else Con_Printf("Failed: %s\n", ogengine_get_last_error());
         return;
     }
     if (strcmp(sub, "version") == 0) {
         Con_Printf("STAR API integration 1.0 (OQuake)\n");
         Con_Printf("  Initialized: %s\n", star_initialized() ? "yes" : "no");
-        if (!star_initialized()) Con_Printf("  Last error: %s\n", star_api_get_last_error());
+        if (!star_initialized()) Con_Printf("  Last error: %s\n", ogengine_get_last_error());
         return;
     }
     if (strcmp(sub, "status") == 0) {
         Con_Printf("STAR API initialized: %s\n", star_initialized() ? "yes" : "no");
-        Con_Printf("Last error: %s\n", star_api_get_last_error());
+        Con_Printf("Last error: %s\n", ogengine_get_last_error());
         return;
     }
     if (strcmp(sub, "inventory") == 0) {
-        if (!star_initialized()) { Con_Printf("STAR API not initialized. %s\n", star_api_get_last_error()); return; }
-        if (star_sync_inventory_in_progress()) {
+        if (!star_initialized()) { Con_Printf("STAR API not initialized. %s\n", ogengine_get_last_error()); return; }
+        if (ogengine_sync_inventory_in_progress()) {
             Con_Printf("Inventory sync in progress. Run 'star inventory' again in a moment.\n");
             return;
         }
@@ -4770,7 +4770,7 @@ void OQuake_STAR_Console_f(void) {
     }
     if (strcmp(sub, "has") == 0) {
         if (argc < 3) { Con_Printf("Usage: star has <item_name>\n"); return; }
-        int has = star_api_has_item(Cmd_Argv(2));
+        int has = ogengine_has_item(Cmd_Argv(2));
         Con_Printf("Has '%s': %s\n", Cmd_Argv(2), has ? "yes" : "no");
         return;
     }
@@ -4780,25 +4780,25 @@ void OQuake_STAR_Console_f(void) {
         const char* name = Cmd_Argv(2);
         const char* desc = argc > 3 ? Cmd_Argv(3) : "Added from console";
         const char* type = argc > 4 ? Cmd_Argv(4) : "Miscellaneous";
-        star_api_queue_pickup_with_mint(name, desc, "Quake", type, 1, NULL, NULL, 1);
-        star_api_result_t r = star_api_flush_add_item_jobs();
-        if (r == STAR_API_SUCCESS) {
+        ogengine_queue_pickup_with_mint(name, desc, "Quake", type, 1, NULL, NULL, 1);
+        ogengine_result_t r = ogengine_flush_add_item_jobs();
+        if (r == OGENGINE_SUCCESS) {
             Con_Printf("Added '%s' to STAR inventory.\n", name);
             q_strlcpy(g_star_last_pickup_name, name, sizeof(g_star_last_pickup_name));
             q_strlcpy(g_star_last_pickup_desc, desc ? desc : "", sizeof(g_star_last_pickup_desc));
             q_strlcpy(g_star_last_pickup_type, type ? type : "Miscellaneous", sizeof(g_star_last_pickup_type));
             g_star_has_last_pickup = true;
-        } else Con_Printf("Failed to add '%s': %s\n", name, star_api_get_last_error());
+        } else Con_Printf("Failed to add '%s': %s\n", name, ogengine_get_last_error());
         return;
     }
     if (strcmp(sub, "use") == 0) {
         if (argc < 3) { Con_Printf("Usage: star use <item_name> [context]\n"); return; }
         const char* ctx = argc > 3 ? Cmd_Argv(3) : "console";
-        star_api_queue_use_item(Cmd_Argv(2), ctx);
-        int r = star_api_flush_use_item_jobs();
-        int ok = (r == STAR_API_SUCCESS);
+        ogengine_queue_use_item(Cmd_Argv(2), ctx);
+        int r = ogengine_flush_use_item_jobs();
+        int ok = (r == OGENGINE_SUCCESS);
         Con_Printf("Use '%s' (context %s): %s\n", Cmd_Argv(2), ctx, ok ? "ok" : "failed");
-        if (!ok) Con_Printf("  %s\n", star_api_get_last_error());
+        if (!ok) Con_Printf("  %s\n", ogengine_get_last_error());
         return;
     }
     if (strcmp(sub, "lastpickup") == 0) {
@@ -4814,23 +4814,23 @@ void OQuake_STAR_Console_f(void) {
         const char* qsub = Cmd_Argv(2);
         if (strcmp(qsub, "start") == 0) {
             if (argc < 4) { Con_Printf("Usage: star quest start <quest_id>\n"); return; }
-            star_api_result_t r = star_api_start_quest(Cmd_Argv(3));
-            Con_Printf(r == STAR_API_SUCCESS ? "Quest started.\n" : "Failed: %s\n", star_api_get_last_error());
+            ogengine_result_t r = ogengine_start_quest(Cmd_Argv(3));
+            Con_Printf(r == OGENGINE_SUCCESS ? "Quest started.\n" : "Failed: %s\n", ogengine_get_last_error());
             return;
         }
         if (strcmp(qsub, "objective") == 0) {
             if (argc < 5) { Con_Printf("Usage: star quest objective <quest_id> <objective_id>\n"); return; }
             Con_Printf("[Quests] Quake: completing objective quest=%s objective=%s (console)\n", Cmd_Argv(3), Cmd_Argv(4));
-            star_api_result_t r = star_api_complete_quest_objective(Cmd_Argv(3), Cmd_Argv(4), "Quake");
-            if (r == STAR_API_SUCCESS)
+            ogengine_result_t r = ogengine_complete_quest_objective(Cmd_Argv(3), Cmd_Argv(4), "Quake");
+            if (r == OGENGINE_SUCCESS)
                 g_quest_tracker_needs_refresh = 1;
-            Con_Printf(r == STAR_API_SUCCESS ? "Objective completed.\n" : "Failed: %s\n", star_api_get_last_error());
+            Con_Printf(r == OGENGINE_SUCCESS ? "Objective completed.\n" : "Failed: %s\n", ogengine_get_last_error());
             return;
         }
         if (strcmp(qsub, "complete") == 0) {
             if (argc < 4) { Con_Printf("Usage: star quest complete <quest_id>\n"); return; }
-            star_api_result_t r = star_api_complete_quest(Cmd_Argv(3));
-            Con_Printf(r == STAR_API_SUCCESS ? "Quest completed.\n" : "Failed: %s\n", star_api_get_last_error());
+            ogengine_result_t r = ogengine_complete_quest(Cmd_Argv(3));
+            Con_Printf(r == OGENGINE_SUCCESS ? "Quest completed.\n" : "Failed: %s\n", ogengine_get_last_error());
             return;
         }
         Con_Printf("Unknown: star quest %s. Use start|objective|complete.\n", qsub);
@@ -4843,16 +4843,16 @@ void OQuake_STAR_Console_f(void) {
         const char* desc = argc > 3 ? Cmd_Argv(3) : "Boss from OQuake";
         char nft_id[64] = {0};
         const char* prov = oquake_star_nft_provider.string && oquake_star_nft_provider.string[0] ? oquake_star_nft_provider.string : NULL;
-        star_api_result_t r = star_api_create_monster_nft(name, desc, "Quake", "{}", prov, nft_id);
-        if (r == STAR_API_SUCCESS) Con_Printf("Boss NFT created. ID: %s\n", nft_id[0] ? nft_id : "(none)");
-        else Con_Printf("Failed: %s\n", star_api_get_last_error());
+        ogengine_result_t r = ogengine_create_monster_nft(name, desc, "Quake", "{}", prov, nft_id);
+        if (r == OGENGINE_SUCCESS) Con_Printf("Boss NFT created. ID: %s\n", nft_id[0] ? nft_id : "(none)");
+        else Con_Printf("Failed: %s\n", ogengine_get_last_error());
         return;
     }
     if (strcmp(sub, "deploynft") == 0) {
         if (argc < 4) { Con_Printf("Usage: star deploynft <nft_id> <target_game> [location]\n"); return; }
         const char* loc = argc > 4 ? Cmd_Argv(4) : "";
-        star_api_result_t r = star_api_deploy_boss_nft(Cmd_Argv(2), Cmd_Argv(3), loc);
-        Con_Printf(r == STAR_API_SUCCESS ? "NFT deploy requested.\n" : "Failed: %s\n", star_api_get_last_error());
+        ogengine_result_t r = ogengine_deploy_boss_nft(Cmd_Argv(2), Cmd_Argv(3), loc);
+        Con_Printf(r == OGENGINE_SUCCESS ? "NFT deploy requested.\n" : "Failed: %s\n", ogengine_get_last_error());
         return;
     }
     if (strcmp(sub, "debug") == 0) {
@@ -4863,7 +4863,7 @@ void OQuake_STAR_Console_f(void) {
         }
         if (strcmp(Cmd_Argv(2), "on") == 0) {
             g_star_debug_logging = true;
-            star_api_set_debug(1);
+            ogengine_set_debug(1);
             Con_Printf("STAR debug logging enabled. Check console and star_api.log (in id1 or exe dir).\n");
             OQ_StarDebugLog("STAR debug ON | max_health=%s max_armor=%s always_add=%s allow_pickup_if_max=%s use_health_on_pickup=%s use_armor_on_pickup=%s use_powerup_on_pickup=%s",
                 oquake_star_max_health.string, oquake_star_max_armor.string,
@@ -4871,7 +4871,7 @@ void OQuake_STAR_Console_f(void) {
                 oquake_star_use_health_on_pickup.string, oquake_star_use_armor_on_pickup.string, oquake_star_use_powerup_on_pickup.string);
             return;
         }
-        if (strcmp(Cmd_Argv(2), "off") == 0) { g_star_debug_logging = false; star_api_set_debug(0); Con_Printf("STAR debug logging disabled.\n"); return; }
+        if (strcmp(Cmd_Argv(2), "off") == 0) { g_star_debug_logging = false; ogengine_set_debug(0); Con_Printf("STAR debug logging disabled.\n"); return; }
         Con_Printf("Unknown debug option: %s. Use on|off|status.\n", Cmd_Argv(2));
         return;
     }
@@ -4896,7 +4896,7 @@ void OQuake_STAR_Console_f(void) {
 
         if (star_initialized() && !runtime_user) { Con_Printf("Already logged in. Use 'star beamout' first.\n"); return; }
         if (star_initialized() && runtime_user) {
-        star_api_cleanup();
+        ogengine_cleanup();
         g_star_initialized = 0;
         g_star_beamed_in = 0;
         OQ_ResetCrossGameBeamTransferState();
@@ -4916,9 +4916,9 @@ void OQuake_STAR_Console_f(void) {
         Cvar_SetValueQuick(&oasis_star_anorak_face, 0);
         
         /* Load API URL: CVAR -> env -> default */
-        const char* api_url = oquake_star_api_url.string;
+        const char* api_url = oquake_ogengine_url.string;
         if (!api_url || !api_url[0]) {
-            api_url = getenv("STAR_API_URL");
+            api_url = getenv("OGENGINE_URL");
             if (!api_url || !api_url[0]) {
                 api_url = "https://star-api.oasisplatform.world/api";
             }
@@ -4929,14 +4929,14 @@ void OQuake_STAR_Console_f(void) {
         const char* api_key = NULL;
         if (runtime_user && runtime_pass) {
             /* If username/password provided, use CVAR or env for API key */
-            api_key = oquake_star_api_key.string;
+            api_key = oquake_ogengine_key.string;
             if (!api_key || !api_key[0]) {
-                api_key = getenv("STAR_API_KEY");
+                api_key = getenv("OGENGINE_KEY");
             }
         } else {
-            api_key = oquake_star_api_key.string;
+            api_key = oquake_ogengine_key.string;
             if (!api_key || !api_key[0]) {
-                api_key = getenv("STAR_API_KEY");
+                api_key = getenv("OGENGINE_KEY");
             }
         }
         g_star_config.api_key = api_key;
@@ -4953,12 +4953,12 @@ void OQuake_STAR_Console_f(void) {
             g_star_config.transport = (tr && q_strcasecmp(tr, "native") == 0) ? 1 : 0;
         }
         g_star_config.oasis_dna_path = (oquake_oasis_dna_path.string && oquake_oasis_dna_path.string[0]) ? oquake_oasis_dna_path.string : NULL;
-        star_api_result_t r = star_api_init(&g_star_config);
-        if (r != STAR_API_SUCCESS) {
-            Con_Printf("Beamin failed - init: %s\n", star_api_get_last_error());
+        ogengine_result_t r = ogengine_init(&g_star_config);
+        if (r != OGENGINE_SUCCESS) {
+            Con_Printf("Beamin failed - init: %s\n", ogengine_get_last_error());
             return;
         }
-        /* SSO POST /api/avatar/authenticate goes to WEB4 (_oasisBaseUrl), not star_api_url (WEB5). Apply from game config when set. */
+        /* SSO POST /api/avatar/authenticate goes to WEB4 (_oasisBaseUrl), not ogengine_url (WEB5). Apply from game config when set. */
         {
             const char *oasis_apply = NULL;
             if (oquake_oasis_api_url.string && oquake_oasis_api_url.string[0])
@@ -4966,9 +4966,9 @@ void OQuake_STAR_Console_f(void) {
             else
                 oasis_apply = getenv("OASIS_WEB4_API_BASE_URL");
             if (oasis_apply && oasis_apply[0])
-                star_api_set_oasis_base_url(oasis_apply);
+                ogengine_set_oasis_base_url(oasis_apply);
             else
-                star_api_log_to_file("[OQuake] Beamin: no oasis_api_url in cvars/json and no OASIS_WEB4_API_BASE_URL; STAR Init may still set WEB4 (e.g. localhost STAR :7777 -> OASIS :8888).");
+                ogengine_log_to_file("[OQuake] Beamin: no oasis_api_url in cvars/json and no OASIS_WEB4_API_BASE_URL; STAR Init may still set WEB4 (e.g. localhost STAR :7777 -> OASIS :8888).");
         }
         /* Load username: runtime -> CVAR -> env */
         const char* username = runtime_user;
@@ -4989,7 +4989,7 @@ void OQuake_STAR_Console_f(void) {
         }
         
         if (username && password) {
-            if (star_sync_auth_in_progress()) {
+            if (ogengine_sync_auth_in_progress()) {
                 Con_Printf("Authentication already in progress. Please wait...\n");
                 return;
             }
@@ -4998,15 +4998,15 @@ void OQuake_STAR_Console_f(void) {
                 extern double realtime;
                 g_star_async_auth_start_realtime = realtime;
             }
-            star_sync_auth_start(username, password, OQ_OnAuthDone, NULL);
+            ogengine_sync_auth_start(username, password, OQ_OnAuthDone, NULL);
             g_star_async_auth_pending = 1;
             {
                 char logb[640];
                 const char *ou = (oquake_oasis_api_url.string && oquake_oasis_api_url.string[0]) ? oquake_oasis_api_url.string : "(not set)";
                 q_snprintf(logb, sizeof(logb),
-                    "[OQuake] Beamin: async SSO user=%s star_api_url=%s oasis_api_url=%s (wall timeout %.0fs; HttpClient %ds). WEB4 POST /api/avatar/authenticate uses oasis, not star_api_url.",
+                    "[OQuake] Beamin: async SSO user=%s ogengine_url=%s oasis_api_url=%s (wall timeout %.0fs; HttpClient %ds). WEB4 POST /api/avatar/authenticate uses oasis, not ogengine_url.",
                     username, api_url, ou, OQ_BEAMIN_ASYNC_TIMEOUT_SEC, g_star_config.timeout_seconds > 0 ? g_star_config.timeout_seconds : 30);
-                star_api_log_to_file(logb);
+                ogengine_log_to_file(logb);
             }
             Con_Printf("Authenticating... Please wait...\n");
             if (runtime_user) Cvar_Set("oquake_star_username", runtime_user);
@@ -5015,22 +5015,22 @@ void OQuake_STAR_Console_f(void) {
         }
         if (g_star_config.api_key && g_star_config.avatar_id) {
             g_star_initialized = 1;
-            /* Obsolete: star_api_refresh_avatar_xp() redundant; use star_api_refresh_avatar_profile() on beam-in (done in SSO beamin path). */
+            /* Obsolete: ogengine_refresh_avatar_xp() redundant; use ogengine_refresh_avatar_profile() on beam-in (done in SSO beamin path). */
             // if (!g_star_refresh_xp_called_this_session) {
             //     g_star_refresh_xp_called_this_session = 1;
-            //     star_api_refresh_avatar_xp();
+            //     ogengine_refresh_avatar_xp();
             // }
-            star_api_refresh_avatar_profile();
+            ogengine_refresh_avatar_profile();
             g_star_beamed_in = 1;
             OQ_ResetCrossGameBeamTransferState();
-            star_api_log_to_file("[OQuake] Beamin (API key): profile refresh started");
+            ogengine_log_to_file("[OQuake] Beamin (API key): profile refresh started");
             // Try to get username from avatar_id or use a default
             if (g_star_config.avatar_id) {
                 q_strlcpy(g_star_username, "API User", sizeof(g_star_username));
             }
             /* Save API key and avatar ID to CVARs if they came from env */
-            if (api_key && !oquake_star_api_key.string[0]) {
-                Cvar_Set("oquake_star_api_key", api_key);
+            if (api_key && !oquake_ogengine_key.string[0]) {
+                Cvar_Set("oquake_ogengine_key", api_key);
             }
             if (avatar_id && !oquake_star_avatar_id.string[0]) {
                 Cvar_Set("oquake_star_avatar_id", avatar_id);
@@ -5039,12 +5039,12 @@ void OQuake_STAR_Console_f(void) {
             Con_Printf("Logged in with API key. Cross-game assets enabled.\n");
             return;
         }
-        Con_Printf("Set STAR_USERNAME/STAR_PASSWORD or STAR_API_KEY/STAR_AVATAR_ID and try again.\n");
+        Con_Printf("Set STAR_USERNAME/STAR_PASSWORD or OGENGINE_KEY/STAR_AVATAR_ID and try again.\n");
         return;
     }
     if (strcmp(sub, "beamout") == 0) {
         if (!star_initialized()) { Con_Printf("Not logged in. Use 'star beamin' to log in.\n"); return; }
-        star_api_cleanup();
+        ogengine_cleanup();
         g_star_initialized = 0;
         g_star_beamed_in = 0;
         OQ_ResetCrossGameBeamTransferState();
@@ -5176,10 +5176,10 @@ void OQuake_STAR_Console_f(void) {
     }
     if (strcmp(sub, "seturl") == 0) {
         if (argc < 3) {
-            Con_Printf("Usage: star seturl <star_api_url>\n");
+            Con_Printf("Usage: star seturl <ogengine_url>\n");
             return;
         }
-        Cvar_Set("oquake_star_api_url", Cmd_Argv(2));
+        Cvar_Set("oquake_ogengine_url", Cmd_Argv(2));
         OQ_SaveStarConfigToFiles();
         Con_Printf("STAR API URL set to: %s. Config files updated.\n", Cmd_Argv(2));
         return;
@@ -5191,7 +5191,7 @@ void OQuake_STAR_Console_f(void) {
         }
         Cvar_Set("oquake_oasis_api_url", Cmd_Argv(2));
         if (g_star_initialized)
-            star_api_set_oasis_base_url(Cmd_Argv(2));
+            ogengine_set_oasis_base_url(Cmd_Argv(2));
         OQ_SaveStarConfigToFiles();
         Con_Printf("OASIS API URL set to: %s. Config files updated.\n", Cmd_Argv(2));
         return;
@@ -5264,7 +5264,7 @@ void OQuake_STAR_DrawInventoryOverlay(cb_context_t* cbx) {
         float t = (float)cl.time;
         if (t - s_oq_quest_level_time_last >= 10.f) {
             s_oq_quest_level_time_last = t;
-            star_api_queue_quest_level_time("Quake", (int)(t + 0.5f));
+            ogengine_queue_quest_level_time("Quake", (int)(t + 0.5f));
         }
     }
     /* Draw toast first every frame (so it shows when C/F or E at max even if overlay is closed) */
@@ -5282,8 +5282,8 @@ void OQuake_STAR_DrawInventoryOverlay(cb_context_t* cbx) {
             if (keydown[s_q_key] && !g_quest_key_was_down) {
                 g_quest_popup_open = !g_quest_popup_open;
                 if (g_quest_popup_open) {
-                    /* STAR: no progress POST/merge and no quest-cache replace from GET while popup open (see star_api_set_quest_popup_open). Cache stays client-merged during play; no GET on open (would be discarded while flag is set). */
-                    star_api_set_quest_popup_open(1);
+                    /* STAR: no progress POST/merge and no quest-cache replace from GET while popup open (see ogengine_set_quest_popup_open). Cache stays client-merged during play; no GET on open (would be discarded while flag is set). */
+                    ogengine_set_quest_popup_open(1);
                     g_quest_popup_sync_to_tracker = 1;  /* Sync selection to tracked quest once list is ready */
                     g_quest_popup_sync_objective_once = 1;  /* Sync objective selection to tracked objective once */
                     g_quest_popup_suppress_enter_frames = 0;  /* do not block Enter; Q is edge-triggered so accidental Enter is rare */
@@ -5376,7 +5376,7 @@ void OQuake_STAR_DrawInventoryOverlay(cb_context_t* cbx) {
         if (s_o_key >= 0 && s_o_key < MAX_KEYS) {
             if (keydown[s_o_key] && !g_quest_o_key_was_down) {
                 char tr_buf[1024];
-                int nr = star_api_get_quest_tracker_objectives_string(g_quest_tracker_id, tr_buf, sizeof(tr_buf));
+                int nr = ogengine_get_quest_tracker_objectives_string(g_quest_tracker_id, tr_buf, sizeof(tr_buf));
                 if (nr > 0 && nr < (int)sizeof(tr_buf)) tr_buf[nr] = '\0';
                 else tr_buf[0] = '\0';
                 int n_obj = 0;
@@ -5388,7 +5388,7 @@ void OQuake_STAR_DrawInventoryOverlay(cb_context_t* cbx) {
                 /* Fallback: if tracker API returned no lines, count objectives from get_quest_objectives_string so cycle has correct steps */
                 if (n_obj == 0) {
                     static char obj_buf[1024];
-                    int no = star_api_get_quest_objectives_string(g_quest_tracker_id, obj_buf, sizeof(obj_buf));
+                    int no = ogengine_get_quest_objectives_string(g_quest_tracker_id, obj_buf, sizeof(obj_buf));
                     if (no > 0 && no < (int)sizeof(obj_buf)) obj_buf[no] = '\0';
                     else obj_buf[0] = '\0';
                     if (obj_buf[0]) {
@@ -5565,7 +5565,7 @@ void OQuake_STAR_DrawInventoryOverlay(cb_context_t* cbx) {
         static int q_filtered_count;
 
         /* Left list: top-level quests only (no sub-quests). Same format so parsing unchanged. */
-        int n = star_api_get_top_level_quests_string(quest_buf, sizeof(quest_buf));
+        int n = ogengine_get_top_level_quests_string(quest_buf, sizeof(quest_buf));
         if (n < 0) n = 0;
         if (n >= (int)sizeof(quest_buf)) n = (int)sizeof(quest_buf) - 1;
         quest_buf[n] = '\0';
@@ -5727,9 +5727,9 @@ void OQuake_STAR_DrawInventoryOverlay(cb_context_t* cbx) {
         drill_q_filtered_count = 0;
         if (g_quest_drill_parent_id[0]) {
             int di;
-            int dno = star_api_get_quest_objectives_string(g_quest_drill_parent_id, drill_obj_buf, sizeof(drill_obj_buf));
+            int dno = ogengine_get_quest_objectives_string(g_quest_drill_parent_id, drill_obj_buf, sizeof(drill_obj_buf));
             if (dno > 0) drill_obj_buf[dno] = '\0';
-            int dns = star_api_get_quest_sub_quests_string(g_quest_drill_parent_id, drill_sub_buf, sizeof(drill_sub_buf));
+            int dns = ogengine_get_quest_sub_quests_string(g_quest_drill_parent_id, drill_sub_buf, sizeof(drill_sub_buf));
             if (dns > 0) drill_sub_buf[dns] = '\0';
             {
                 const char* bufs[2] = { drill_obj_buf, drill_sub_buf };
@@ -5852,7 +5852,7 @@ void OQuake_STAR_DrawInventoryOverlay(cb_context_t* cbx) {
                         {
                             static char sync_log[128];
                             q_snprintf(sync_log, sizeof(sync_log), "[Quest] Popup sync: fi=%d id=%.36s", fi, g_quest_tracker_id);
-                            star_api_log_to_file(sync_log);
+                            ogengine_log_to_file(sync_log);
                         }
                         break;
                     }
@@ -5941,20 +5941,20 @@ void OQuake_STAR_DrawInventoryOverlay(cb_context_t* cbx) {
         obj_count = 0;
         sq_count = 0;
         if (panel_quest_id[0]) {
-            int nr = star_api_get_quest_prereqs_string(panel_quest_id, prereq_buf, sizeof(prereq_buf));
+            int nr = ogengine_get_quest_prereqs_string(panel_quest_id, prereq_buf, sizeof(prereq_buf));
             if (nr > 0) prereq_buf[nr] = '\0';
-            int no = star_api_get_quest_objectives_string(panel_quest_id, objectives_buf, sizeof(objectives_buf));
+            int no = ogengine_get_quest_objectives_string(panel_quest_id, objectives_buf, sizeof(objectives_buf));
             if (no > 0) objectives_buf[no] = '\0';
             /* When objectives cache version changes (on-demand fetch merged), re-fetch so the list refreshes immediately. */
             {
-                int obj_ver = star_api_get_quest_objectives_cache_version();
+                int obj_ver = ogengine_get_quest_objectives_cache_version();
                 if (obj_ver != s_quest_objectives_cache_version) {
                     s_quest_objectives_cache_version = obj_ver;
-                    no = star_api_get_quest_objectives_string(panel_quest_id, objectives_buf, sizeof(objectives_buf));
+                    no = ogengine_get_quest_objectives_string(panel_quest_id, objectives_buf, sizeof(objectives_buf));
                     if (no > 0) objectives_buf[no] = '\0';
                 }
             }
-            int ns = star_api_get_quest_sub_quests_string(panel_quest_id, subquest_buf, sizeof(subquest_buf));
+            int ns = ogengine_get_quest_sub_quests_string(panel_quest_id, subquest_buf, sizeof(subquest_buf));
             if (ns > 0) subquest_buf[ns] = '\0';
             /* Parse prereq_buf: lines "Q\tid\tname\tdesc\tstatus\tpct" */
             {
@@ -6219,9 +6219,9 @@ void OQuake_STAR_DrawInventoryOverlay(cb_context_t* cbx) {
                             else
                                 q_strlcpy(g_quest_tracker_active_objective_id, sel_obj, sizeof(g_quest_tracker_active_objective_id));
                         }
-                        star_api_start_quest_then_set_active_objective(panel_quest_id, sel_obj);
+                        ogengine_start_quest_then_set_active_objective(panel_quest_id, sel_obj);
                         used_start_then = 1;
-                        star_api_log_to_file("[Quest] Enter objective: start_then_set_active_objective (ODOOM parity)");
+                        ogengine_log_to_file("[Quest] Enter objective: start_then_set_active_objective (ODOOM parity)");
                     } else if (!same_tracked && inprog) {
                         if (strcmp(panel_quest_id, g_quest_tracker_id) != 0) {
                             g_quest_tracker_active_objective_id[0] = '\0';
@@ -6242,7 +6242,7 @@ void OQuake_STAR_DrawInventoryOverlay(cb_context_t* cbx) {
                             const char* qn = g_quest_tracker_name[0] ? g_quest_tracker_name : "(none)";
                             const char* on = (g_quest_objectives_selected >= 0 && g_quest_objectives_selected < obj_count && obj_name[g_quest_objectives_selected][0]) ? obj_name[g_quest_objectives_selected] : "(none)";
                             q_snprintf(log_buf, sizeof(log_buf), "[Quest] SAVE (Enter on objective) quest_id=%s objective_id=%s quest_name=%s objective_name=%s", g_quest_tracker_id, g_quest_tracker_active_objective_id, qn, on);
-                            star_api_log_to_file(log_buf);
+                            ogengine_log_to_file(log_buf);
                         }
                         {
                             char persist_obj[64];
@@ -6252,7 +6252,7 @@ void OQuake_STAR_DrawInventoryOverlay(cb_context_t* cbx) {
                                 persist_ptr = g_quest_tracker_active_objective_id;
                             } else
                                 persist_ptr = g_quest_tracker_active_objective_id;
-                            star_api_set_active_quest(g_quest_tracker_id, persist_ptr);
+                            ogengine_set_active_quest(g_quest_tracker_id, persist_ptr);
                         }
                     }
                 }
@@ -6582,7 +6582,7 @@ void OQuake_STAR_DrawInventoryOverlay(cb_context_t* cbx) {
                     sect_y += line_h + 2;
                     progress_buf[0] = '\0';
                     if (panel_quest_id[0] && selected_obj_id) {
-                        int np = star_api_get_quest_objective_requirements_string(panel_quest_id, selected_obj_id, progress_buf, sizeof(progress_buf));
+                        int np = ogengine_get_quest_objective_requirements_string(panel_quest_id, selected_obj_id, progress_buf, sizeof(progress_buf));
                         if (np > 0 && np < (int)sizeof(progress_buf)) progress_buf[np] = '\0';
                         else progress_buf[0] = '\0';
                     }
@@ -6741,7 +6741,7 @@ static void OQ_BuildTrackerQuestTitleLine(char* out, size_t outsz) {
 	else
 		q_strlcpy(base, "Loading...", sizeof(base));
 	q_strlcpy(out, base, outsz);
-	n = star_api_get_top_level_quests_string(qbuf, sizeof(qbuf));
+	n = ogengine_get_top_level_quests_string(qbuf, sizeof(qbuf));
 	if (n <= 0 || n >= (int)sizeof(qbuf))
 		return;
 	qbuf[n] = '\0';
@@ -6782,7 +6782,7 @@ static int OQ_SelectPersistableObjectiveId(const char* quest_id, const char* pre
 	first_incomplete[0] = '\0';
 	if (!quest_id || !quest_id[0] || !out_id || out_size == 0)
 		return 0;
-	no = star_api_get_quest_objectives_string(quest_id, obj_buf, sizeof(obj_buf));
+	no = ogengine_get_quest_objectives_string(quest_id, obj_buf, sizeof(obj_buf));
 	if (no <= 0 || no >= (int)sizeof(obj_buf))
 		return 0;
 	obj_buf[no] = '\0';
@@ -6859,7 +6859,7 @@ void OQuake_STAR_DrawQuestTracker(cb_context_t* cbx) {
     /* When an objective was just completed, request cache refresh and clear stale fallback so tracker updates. */
     if (g_quest_tracker_needs_refresh) {
         g_quest_tracker_needs_refresh = 0;
-        star_api_refresh_quest_cache_in_background();
+        ogengine_refresh_quest_cache_in_background();
         g_quest_tracker_last_n_obj = 0;
         g_quest_tracker_last_n_obj_id[0] = '\0';
     }
@@ -6867,7 +6867,7 @@ void OQuake_STAR_DrawQuestTracker(cb_context_t* cbx) {
     /* When tracker was set on beam-in (name empty), fill name so HUD shows correct name as soon as quest list loads (without opening popup). */
     if (g_quest_tracker_name[0] == '\0') {
         /* Prefer name from cache API so tracker updates as soon as quest list has loaded. */
-        int nr = star_api_get_tracker_quest_name(g_quest_tracker_name, sizeof(g_quest_tracker_name));
+        int nr = ogengine_get_tracker_quest_name(g_quest_tracker_name, sizeof(g_quest_tracker_name));
         if (nr > 0 && nr < (int)sizeof(g_quest_tracker_name))
             g_quest_tracker_name[nr] = '\0';
         else
@@ -6882,7 +6882,7 @@ void OQuake_STAR_DrawQuestTracker(cb_context_t* cbx) {
     int active_idx = 0;
     /* Refresh every frame: STAR client cache is in-memory (ODOOM updates tracker CVars each frame). */
     {
-        int nr = star_api_get_quest_tracker_objectives_string(g_quest_tracker_id, tr_buf, sizeof(tr_buf));
+        int nr = ogengine_get_quest_tracker_objectives_string(g_quest_tracker_id, tr_buf, sizeof(tr_buf));
         if (nr > 0 && nr < (int)sizeof(tr_buf)) tr_buf[nr] = '\0';
         else tr_buf[0] = '\0';
 
@@ -6895,7 +6895,7 @@ void OQuake_STAR_DrawQuestTracker(cb_context_t* cbx) {
         /* Fallback: if tracker API returned no lines, use quest objectives string and show objective names. */
         if (n_obj == 0) {
             static char obj_buf[1024];
-            int no = star_api_get_quest_objectives_string(g_quest_tracker_id, obj_buf, sizeof(obj_buf));
+            int no = ogengine_get_quest_objectives_string(g_quest_tracker_id, obj_buf, sizeof(obj_buf));
             if (no > 0 && no < (int)sizeof(obj_buf)) obj_buf[no] = '\0';
             else obj_buf[0] = '\0';
             if (obj_buf[0]) {
@@ -6944,7 +6944,7 @@ void OQuake_STAR_DrawQuestTracker(cb_context_t* cbx) {
         if (g_quest_tracker_active_objective_id[0] && g_quest_tracker_id[0] &&
             (g_quest_tracker_active_display_index < 0 || (n_obj > 0 && g_quest_tracker_active_display_index >= n_obj))) {
             static char obuf[1024];
-            int no = star_api_get_quest_objectives_string(g_quest_tracker_id, obuf, sizeof(obuf));
+            int no = ogengine_get_quest_objectives_string(g_quest_tracker_id, obuf, sizeof(obuf));
             if (no > 0 && no < (int)sizeof(obuf)) obuf[no] = '\0';
             else obuf[0] = '\0';
             if (obuf[0]) {
@@ -6978,7 +6978,7 @@ void OQuake_STAR_DrawQuestTracker(cb_context_t* cbx) {
         if (g_quest_tracker_active_objective_id[0] && g_quest_tracker_active_display_index >= 0 && g_quest_tracker_active_display_index < n_obj)
             active_idx = g_quest_tracker_active_display_index;
         else {
-            active_idx = star_api_get_quest_tracker_active_objective_index(g_quest_tracker_id);
+            active_idx = ogengine_get_quest_tracker_active_objective_index(g_quest_tracker_id);
             if (active_idx < 0) active_idx = 0;
             if (active_idx >= n_obj && n_obj > 0) active_idx = n_obj - 1;
         }
@@ -7127,7 +7127,7 @@ void OQuake_STAR_DrawXpStatus(cb_context_t* cbx) {
         return;
     if (!g_star_initialized || !g_star_beamed_in)
         return;
-    if (!star_api_get_avatar_xp(&xp))
+    if (!ogengine_get_avatar_xp(&xp))
         return;
     q_snprintf(buf, sizeof(buf), "XP: %d", xp);
     /* Top right: same horizontal alignment as version, a bit below top edge */

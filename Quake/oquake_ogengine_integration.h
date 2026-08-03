@@ -1,4 +1,4 @@
-/**
+﻿/**
  * OQuake - OASIS STAR API Integration
  *
  * Integrates Quake with the OASIS STAR API so keys collected in ODOOM
@@ -12,7 +12,7 @@
 #ifndef OQUAKE_STAR_INTEGRATION_H
 #define OQUAKE_STAR_INTEGRATION_H
 
-#include "star_api.h"
+#include "ogengine.h"
 
 #ifdef __cplusplus
 extern "C" {

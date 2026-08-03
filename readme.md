@@ -1,10 +1,10 @@
-# Introduction
+﻿# Introduction
 
-OQUAKE is a fork of [VkQuake](https://github.com/Novum/vkQuake), which is built on top of the new OGEngine (STARAPIClient, WEB4 OASIS API & WEB5 STAR API).
+OQUAKE is a fork of [VkQuake](https://github.com/Novum/vkQuake), which is built on top of the new OGEngine (OGEngineClient, WEB4 OASIS API & WEB5 STAR API).
 
 This will integrate with any other game built on top of the OGEngine, so far this includes ODOOM, which is also playable on Windows & Linux (OQUAKE also). Mac support is coming soon... Linux version may work with some tweaks but this has not been tested yet... any help with this would be appreciated thanks!
 
-The STARAPIClient can be downloaded here:
+The OGEngineClient can be downloaded here:
 https://github.com/NextGenSoftwareUK/OASIS/releases/tag/STAR-API-CLIENT-v1.0.0
 
 Below is a link to a tech demo of what it can do in ODOOM & OQUAKE:
@@ -12,7 +12,7 @@ https://youtu.be/ZH5u6OVPVYg?si=qbz8CfXs5kgWYPSn
 
 Below is the useful description from that video:
 
-"Preview of the new OGEngine (OASIS Game Engine) powering ODOOM and OQUAKE (forks of UZDOOM & VkQuake) built on top of the new STARAPIClient (which talks to the WEB4 OASIS API & WEB5 STAR API) and features many advanced features such as multi-threading, batching, etc). OGEngine = STARAPIClient + WEB4 OASIS API + WEB5 STAR API and is the beginning of the true open extendable metaverse (OASIS Omniverse) featuring cross quests, cross inventory/assets, SSO, NFT minting, sending items to other avatars/clans & much more! :)
+"Preview of the new OGEngine (OASIS Game Engine) powering ODOOM and OQUAKE (forks of UZDOOM & VkQuake) built on top of the new OGEngineClient (which talks to the WEB4 OASIS API & WEB5 STAR API) and features many advanced features such as multi-threading, batching, etc). OGEngine = OGEngineClient + WEB4 OASIS API + WEB5 STAR API and is the beginning of the true open extendable metaverse (OASIS Omniverse) featuring cross quests, cross inventory/assets, SSO, NFT minting, sending items to other avatars/clans & much more! :)
 
 We bridged Doom and Quake using OASIS creating a “meta” game of the two. This engine abstracts mission and game state logic, offering a new dimension to open source games. This is a key milestone in our journey to building the metaverse.
 
