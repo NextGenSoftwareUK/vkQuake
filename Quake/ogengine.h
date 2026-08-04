@@ -22,7 +22,7 @@ typedef struct {
     int timeout_seconds;
     /* Optional: which game binary is running (e.g. "ODOOM", "OQUAKE") for cross-game quest tracker rows. NULL = use quest/objective metadata + last progress only. */
     const char* client_game_source;
-    /* 0 = remote (HTTP WEB5/WEB4). 1 = native in-process OASIS (requires a star_api build that embeds HyperDrive; default library returns OGENGINE_ERROR_INIT_FAILED). */
+    /* 0 = remote (HTTP WEB5/WEB4). 1 = native in-process OASIS (requires a OGEngineClient build that embeds HyperDrive; default library returns OGENGINE_ERROR_INIT_FAILED). */
     int32_t transport;
     /* Optional: UTF-8 path to OASIS_DNA.json for native transport (for future native host). */
     const char* oasis_dna_path;
@@ -178,9 +178,9 @@ int ogengine_consume_last_mint_result(char* item_name_out, size_t item_name_size
 int ogengine_consume_last_background_error(char* buf, size_t size);
 /** Consume one STAR log message for the game console. Returns 1 if a message was copied to buf, 0 otherwise. Call from game pump each frame. */
 int ogengine_consume_console_log(char* buf, size_t size);
-/** Append a line to star_api.log (same file as C# StarApiLog). Use from game code so door-check and other STAR debug messages appear in the log for pasting. message can be NULL (no-op). */
+/** Append a line to ogengine.log (same file as C# StarApiLog). Use from game code so door-check and other STAR debug messages appear in the log for pasting. message can be NULL (no-op). */
 void ogengine_log_to_file(const char* message);
-/** Enable (1) or disable (0) STAR API debug logging in the client. When on, quest and other API requests log URI and response to star_api.log and console. Call when user toggles "star debug on|off". */
+/** Enable (1) or disable (0) STAR API debug logging in the client. When on, quest and other API requests log URI and response to ogengine.log and console. Call when user toggles "star debug on|off". */
 void ogengine_set_debug(int enabled);
 void ogengine_set_callback(ogengine_callback_t callback, void* user_data);
 /** Optional: set callback with operation_type so game only reacts to profile-loaded. If set, profile refresh uses this; else uses ogengine_set_callback. */

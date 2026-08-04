@@ -13,7 +13,7 @@ extern ogengine_result_t ogengine_send_item_to_avatar(const char*, const char*, 
 extern ogengine_result_t ogengine_send_item_to_clan(const char*, const char*, int, const char*);
 #endif
 
-/* Optional stub for ogengine_queue_quest_level_time when not linking star_api.dll (e.g. vkQuake with older lib).
+/* Optional stub for ogengine_queue_quest_level_time when not linking OGEngineClient.dll (e.g. vkQuake with older lib).
  * Define OGENGINE_PROVIDE_QUEST_LEVEL_TIME_STUB in the build to resolve LNK2001; otherwise link with a
  * STAR API build that exports this (StarApiClient.cs UnmanagedCallersOnly). */
 #ifdef OGENGINE_PROVIDE_QUEST_LEVEL_TIME_STUB

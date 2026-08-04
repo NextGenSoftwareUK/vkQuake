@@ -84,25 +84,25 @@ static void OQ_DrawStrCol(cb_context_t* cbx, float x, float y, const char* s, by
 #define OQ_BEAMIN_ASYNC_TIMEOUT_SEC 30.0
 
 #ifndef OGENGINE_HAS_SEND_ITEM
-/* Forward declare send-item API when using an older star_api.h. Link with updated star_api.lib. */
+/* Forward declare send-item API when using an older OGEngineClient.h. Link with updated OGEngineClient.lib. */
 ogengine_result_t ogengine_send_item_to_avatar(const char* target_username_or_avatar_id, const char* item_name, int quantity, const char* item_id);
 ogengine_result_t ogengine_send_item_to_clan(const char* clan_name_or_target, const char* item_name, int quantity, const char* item_id);
 #endif
 
-/* When OQUAKE_OGENGINE_REFRESH_AVATAR_PROFILE_IMPL is defined, provide ogengine_refresh_avatar_profile (forward to DLL at runtime). Use when the linked star_api.lib does not export it (e.g. Native AOT import lib quirk or old lib). Remove the define once the lib exports it. */
+/* When OQUAKE_OGENGINE_REFRESH_AVATAR_PROFILE_IMPL is defined, provide ogengine_refresh_avatar_profile (forward to DLL at runtime). Use when the linked OGEngineClient.lib does not export it (e.g. Native AOT import lib quirk or old lib). Remove the define once the lib exports it. */
 #ifdef OQUAKE_OGENGINE_REFRESH_AVATAR_PROFILE_IMPL
 #ifdef _WIN32
 void ogengine_refresh_avatar_profile(void) {
 	typedef void (__cdecl *fn_t)(void);
 	static fn_t fn;
 	if (!fn) {
-		HMODULE h = GetModuleHandleA("star_api.dll");
+		HMODULE h = GetModuleHandleA("OGEngineClient.dll");
 		if (h) fn = (fn_t)(void*)GetProcAddress(h, "ogengine_refresh_avatar_profile");
 	}
 	if (fn) fn();
 }
 #else
-/* RTLD_NEXT: dlopen(NULL)+dlsym resolves this same symbol in the executable → infinite recursion. NEEDED is often star_api.so, not libstar_api.so. */
+/* RTLD_NEXT: dlopen(NULL)+dlsym resolves this same symbol in the executable → infinite recursion. NEEDED is often OGEngineClient.so, not libOGEngineClient.so. */
 void ogengine_refresh_avatar_profile(void) {
 	typedef void (*fn_t)(void);
 	static fn_t real_fn;
@@ -114,14 +114,14 @@ void ogengine_refresh_avatar_profile(void) {
 #endif
 #endif
 
-/* When OQUAKE_OGENGINE_SESSION_IMPL is defined, provide JWT/session APIs by forwarding to star_api.dll at runtime. Avoids load-time "Entry Point Not Found" when DLL export list lags. */
+/* When OQUAKE_OGENGINE_SESSION_IMPL is defined, provide JWT/session APIs by forwarding to OGEngineClient.dll at runtime. Avoids load-time "Entry Point Not Found" when DLL export list lags. */
 #ifdef OQUAKE_OGENGINE_SESSION_IMPL
 #ifdef _WIN32
 static ogengine_result_t ogengine_authenticate_with_jwt_out_impl(const char* user, const char* pass, char* jwt_buf, size_t jwt_size) {
 	typedef ogengine_result_t (__cdecl *fn_t)(const char*, const char*, char*, size_t);
 	static fn_t fn;
 	if (!fn) {
-		HMODULE h = GetModuleHandleA("star_api.dll");
+		HMODULE h = GetModuleHandleA("OGEngineClient.dll");
 		if (h) fn = (fn_t)(void*)GetProcAddress(h, "ogengine_authenticate_with_jwt_out");
 	}
 	return fn ? fn(user, pass, jwt_buf, jwt_size) : (ogengine_result_t)OGENGINE_ERROR_NOT_INITIALIZED;
@@ -132,7 +132,7 @@ static ogengine_result_t ogengine_set_saved_session_impl(const char* jwt) {
 	typedef ogengine_result_t (__cdecl *fn_t)(const char*);
 	static fn_t fn;
 	if (!fn) {
-		HMODULE h = GetModuleHandleA("star_api.dll");
+		HMODULE h = GetModuleHandleA("OGEngineClient.dll");
 		if (h) fn = (fn_t)(void*)GetProcAddress(h, "ogengine_set_saved_session");
 	}
 	return fn ? fn(jwt) : (ogengine_result_t)OGENGINE_ERROR_NOT_INITIALIZED;
@@ -143,7 +143,7 @@ static ogengine_result_t ogengine_restore_session_impl(void) {
 	typedef ogengine_result_t (__cdecl *fn_t)(void);
 	static fn_t fn;
 	if (!fn) {
-		HMODULE h = GetModuleHandleA("star_api.dll");
+		HMODULE h = GetModuleHandleA("OGEngineClient.dll");
 		if (h) fn = (fn_t)(void*)GetProcAddress(h, "ogengine_restore_session");
 	}
 	return fn ? fn() : (ogengine_result_t)OGENGINE_ERROR_NOT_INITIALIZED;
@@ -154,7 +154,7 @@ static int ogengine_get_current_username_impl(char* buf, size_t buf_size) {
 	typedef int (__cdecl *fn_t)(char*, size_t);
 	static fn_t fn;
 	if (!fn) {
-		HMODULE h = GetModuleHandleA("star_api.dll");
+		HMODULE h = GetModuleHandleA("OGEngineClient.dll");
 		if (h) fn = (fn_t)(void*)GetProcAddress(h, "ogengine_get_current_username");
 	}
 	return fn ? fn(buf, buf_size) : 0;
@@ -165,7 +165,7 @@ static int ogengine_get_current_jwt_impl(char* buf, size_t buf_size) {
 	typedef int (__cdecl *fn_t)(char*, size_t);
 	static fn_t fn;
 	if (!fn) {
-		HMODULE h = GetModuleHandleA("star_api.dll");
+		HMODULE h = GetModuleHandleA("OGEngineClient.dll");
 		if (h) fn = (fn_t)(void*)GetProcAddress(h, "ogengine_get_current_jwt");
 	}
 	return fn ? fn(buf, buf_size) : 0;
@@ -176,7 +176,7 @@ static void ogengine_set_refresh_token_impl(const char* refresh_token) {
 	typedef void (__cdecl *fn_t)(const char*);
 	static fn_t fn;
 	if (!fn) {
-		HMODULE h = GetModuleHandleA("star_api.dll");
+		HMODULE h = GetModuleHandleA("OGEngineClient.dll");
 		if (h) fn = (fn_t)(void*)GetProcAddress(h, "ogengine_set_refresh_token");
 	}
 	if (fn) fn(refresh_token);
@@ -187,7 +187,7 @@ static int ogengine_get_current_refresh_token_impl(char* buf, size_t buf_size) {
 	typedef int (__cdecl *fn_t)(char*, size_t);
 	static fn_t fn;
 	if (!fn) {
-		HMODULE h = GetModuleHandleA("star_api.dll");
+		HMODULE h = GetModuleHandleA("OGEngineClient.dll");
 		if (h) fn = (fn_t)(void*)GetProcAddress(h, "ogengine_get_current_refresh_token");
 	}
 	return fn ? fn(buf, buf_size) : 0;
@@ -198,7 +198,7 @@ static int ogengine_is_session_expired_impl(void) {
 	typedef int (__cdecl *fn_t)(void);
 	static fn_t fn;
 	if (!fn) {
-		HMODULE h = GetModuleHandleA("star_api.dll");
+		HMODULE h = GetModuleHandleA("OGEngineClient.dll");
 		if (h) fn = (fn_t)(void*)GetProcAddress(h, "ogengine_is_session_expired");
 	}
 	return fn ? fn() : 0;
@@ -209,7 +209,7 @@ static void ogengine_request_inventory_in_background_impl(void) {
 	typedef void (__cdecl *fn_t)(void);
 	static fn_t fn;
 	if (!fn) {
-		HMODULE h = GetModuleHandleA("star_api.dll");
+		HMODULE h = GetModuleHandleA("OGEngineClient.dll");
 		if (h) fn = (fn_t)(void*)GetProcAddress(h, "ogengine_request_inventory_in_background");
 	}
 	if (fn) fn();
@@ -447,7 +447,7 @@ cvar_t oasis_star_beam_face = {"oasis_star_beam_face", "1", CVAR_ARCHIVE};
 cvar_t oquake_star_config_file = {"oquake_star_config_file", "json", CVAR_ARCHIVE}; /* "json" or "cfg" - which config file to use */
 cvar_t oquake_ogengine_url = {"oquake_ogengine_url", "https://oasisweb4.com/api/star", CVAR_ARCHIVE};
 cvar_t oquake_oasis_api_url = {"oquake_oasis_api_url", "https://oasisweb4.com", CVAR_ARCHIVE};
-/* "remote" = HTTP WEB5/WEB4 (default). "native" = in-process OASIS (requires star_api built with HyperDrive; default DLL fails init with clear error). */
+/* "remote" = HTTP WEB5/WEB4 (default). "native" = in-process OASIS (requires OGEngineClient built with HyperDrive; default DLL fails init with clear error). */
 cvar_t oquake_star_transport = {"oquake_star_transport", "remote", CVAR_ARCHIVE};
 cvar_t oquake_oasis_dna_path = {"oquake_oasis_dna_path", "", CVAR_ARCHIVE};
 cvar_t oquake_star_username = {"oquake_star_username", "", 0};
@@ -2656,7 +2656,7 @@ static int OQ_SaveJsonConfig(const char *json_path) {
         } else if (got_username) {
             static int s_jwt_missing_logged = 0;
             if (!s_jwt_missing_logged++) {
-                Con_Printf("OQuake: Could not get JWT from STAR API (autologin will not work). Rebuild STARAPIClient (clean bin/obj) and run BUILD_AND_DEPLOY_STAR_CLIENT.bat so star_api.dll exports session APIs.\n");
+                Con_Printf("OQuake: Could not get JWT from STAR API (autologin will not work). Rebuild STARAPIClient (clean bin/obj) and run BUILD_AND_DEPLOY_STAR_CLIENT.bat so OGEngineClient.dll exports session APIs.\n");
             }
         }
         {
@@ -4054,7 +4054,7 @@ static void OQ_PickupLog(const char* fmt, ...) {
     }
 }
 
-/** Log to console and star_api.log only when star debug is on. Use for use-item, C/F keys, config, and general STAR flow tracking. */
+/** Log to console and ogengine.log only when star debug is on. Use for use-item, C/F keys, config, and general STAR flow tracking. */
 static void OQ_StarDebugLog(const char* fmt, ...) {
     char buf[512];
     va_list ap;
@@ -4864,7 +4864,7 @@ void OQuake_STAR_Console_f(void) {
         if (strcmp(Cmd_Argv(2), "on") == 0) {
             g_star_debug_logging = true;
             ogengine_set_debug(1);
-            Con_Printf("STAR debug logging enabled. Check console and star_api.log (in id1 or exe dir).\n");
+            Con_Printf("STAR debug logging enabled. Check console and ogengine.log (in id1 or exe dir).\n");
             OQ_StarDebugLog("STAR debug ON | max_health=%s max_armor=%s always_add=%s allow_pickup_if_max=%s use_health_on_pickup=%s use_armor_on_pickup=%s use_powerup_on_pickup=%s",
                 oquake_star_max_health.string, oquake_star_max_armor.string,
                 oquake_star_always_add_items_to_inventory.string, oquake_star_always_allow_pickup_if_max.string,
@@ -6398,7 +6398,7 @@ void OQuake_STAR_DrawInventoryOverlay(cb_context_t* cbx) {
             int load_len = (int)strlen(load_msg);
             OQ_DrawStr(cbx, qx + (qw - OQ_TEXT_W_CHARS(load_len)) / 2, qy + (qh - OQ_PY(8)) / 2, load_msg);
         } else if (n >= 6 && memcmp(quest_buf, "Error:", 6) == 0) {
-            OQ_DrawStr(cbx, qx + OQ_PY(30), qy + OQ_PY(48), "Error loading quests. Check console or star_api.log for details.");
+            OQ_DrawStr(cbx, qx + OQ_PY(30), qy + OQ_PY(48), "Error loading quests. Check console or ogengine.log for details.");
         } else if (left_list_count > 0 || g_quest_drill_parent_id[0]) {
             /* Left: table Name | % | Status (half name column: 27 chars) */
             char name_buf[64];
